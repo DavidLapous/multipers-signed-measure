@@ -5,7 +5,6 @@
  *    Copyright (C) 2014 Inria
  *
  *    Modification(s):
- * 		- 2022/11 Hannah Schreiber / David Loiseaux : adapt for multipersistence. 
  *      - YYYY/MM Author: Description of the modification
  */
 
@@ -32,14 +31,12 @@ struct Simplex_tree_node_explicit_storage : SimplexTree::Filtration_simplex_base
   typedef typename SimplexTree::Filtration_value Filtration_value;
   typedef typename SimplexTree::Simplex_key Simplex_key;
 
-  Simplex_tree_node_explicit_storage(Siblings * sib,
-                                     Filtration_value filtration)
+  Simplex_tree_node_explicit_storage(Siblings * sib = nullptr,
+                                     Filtration_value filtration = {}) 
       : children_(sib) {
     this->assign_filtration(filtration);
   }
-  Simplex_tree_node_explicit_storage()
-      : children_(nullptr) {
-  }
+
   /*
    * Assign children to the node
    */

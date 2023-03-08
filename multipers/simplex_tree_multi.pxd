@@ -19,15 +19,24 @@ __copyright__ = "Copyright (C) 2016 Inria"
 __license__ = "MIT"
 
 ctypedef int dimension_type
-ctypedef vector[double] point_type
-ctypedef double filtration_value_type
 ctypedef vector[double] filtration_type
 ctypedef vector[int] simplex_type
 ctypedef vector[simplex_type] simplex_list
 ctypedef vector[pair[pair[int,int], pair[double, double]]] edge_list 
 ctypedef vector[int] euler_char_list
 
-cdef extern from "gudhi/Simplex_tree_interface.h" namespace "Gudhi":
+
+
+cdef extern from "multi_filtrations/finitely_critical_filtrations.h" namespace "Gudhi::multi_filtrations":
+	cdef cppclass Finitely_critical_multi_filtration "Gudhi::multi_filtrations::Finitely_critical_multi_filtration<Gudhi::Simplex_tree_options_multidimensional_filtration::value_type>":
+		Finitely_critical_multi_filtration() nogil except +
+		Finitely_critical_multi_filtration(vector[double]) except +
+		Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&)
+		filtration_type& get_vector()  nogil
+		int size() nogil
+
+
+cdef extern from "Simplex_tree_interface_multi.h" namespace "Gudhi":
 	cdef cppclass Simplex_tree_options_multidimensional_filtration:
 		pass
 
@@ -70,7 +79,7 @@ cdef extern from "gudhi/Simplex_tree_interface.h" namespace "Gudhi":
 		vector[pair[simplex_type, filtration_type]] get_cofaces(vector[int] simplex, int dimension) nogil
 		void expansion(int max_dim) nogil except +
 		void remove_maximal_simplex(simplex_type simplex) nogil
-		bool prune_above_filtration(filtration_type filtration) nogil
+		# bool prune_above_filtration(filtration_type filtration) nogil
 		# bool make_filtration_non_decreasing() nogil
 		# void compute_extended_filtration() nogil
 		Simplex_tree_multi_interface* collapse_edges(int nb_collapse_iteration) nogil except +
@@ -90,7 +99,7 @@ cdef extern from "gudhi/Simplex_tree_interface.h" namespace "Gudhi":
 		void expansion_with_blockers_callback(int dimension, blocker_func_t user_func, void *user_data)
 
 		## MULTIPERS STUFF
-		void reset_keys() nogil
+		void set_keys_to_enumerate() nogil
 		int get_key(const simplex_type) nogil
 		void set_key(simplex_type, int) nogil
 		void fill_lowerstar(vector[double], int) nogil
@@ -100,3 +109,5 @@ cdef extern from "gudhi/Simplex_tree_interface.h" namespace "Gudhi":
 		void resize_all_filtrations(int) nogil
 		void set_number_of_parameters(int) nogil
 		int get_number_of_parameters() nogil
+
+

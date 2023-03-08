@@ -5,7 +5,7 @@
  *    Copyright (C) 2016 Inria
  *
  *    Modification(s):
- *		- 2022/11 Hannah Schreiber / David Loiseaux : adapt for multipersistence. 
+ *		- 2022/11 David Loiseaux, Hannah Schreiber : adapt for multipersistence. 
  *      - YYYY/MM Author: Description of the modification
  */
 
@@ -14,11 +14,12 @@
 
 //#include <gudhi/graph_simplicial_complex.h>
 //#include <gudhi/distance_functions.h>
-#include "../gudhi/Simplex_tree.h"
 //#include <gudhi/Points_off_io.h>
 //#include <gudhi/Flag_complex_edge_collapser.h>
-#include "../gudhi/Simplex_tree_multi.h"
-#include <omp.h>
+#include <gudhi/Simplex_tree.h>
+#include "Simplex_tree_multi.h"
+// #include <omp.h>
+#include "multi_filtrations/finitely_critical_filtrations.h"
 
 #include <iostream>
 #include <vector>
@@ -31,13 +32,14 @@ namespace Gudhi {
 template<typename SimplexTreeOptions = Simplex_tree_options_full_featured>
 class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
  public:
+  using Python_filtration_type = std::vector<typename SimplexTreeOptions::value_type>; // TODO : std::conditional
   using Base = Simplex_tree<SimplexTreeOptions>;
   using Filtration_value = typename Base::Filtration_value;
   using Vertex_handle = typename Base::Vertex_handle;
   using Simplex_handle = typename Base::Simplex_handle;
   using Insertion_result = typename std::pair<Simplex_handle, bool>;
   using Simplex = std::vector<Vertex_handle>;
-  using Simplex_and_filtration = std::pair<Simplex, Filtration_value>;
+  using Simplex_and_filtration = std::pair<Simplex, Python_filtration_type>;
   using Filtered_simplices = std::vector<Simplex_and_filtration>;
   using Skeleton_simplex_iterator = typename Base::Skeleton_simplex_iterator;
   using Complex_simplex_iterator = typename Base::Complex_simplex_iterator;
@@ -45,9 +47,6 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
   using Boundary_simplex_iterator = typename Base::Boundary_simplex_iterator;
   typedef bool (*blocker_func_t)(Simplex simplex, void *user_data);
   using euler_chars_type = std::vector<int>;
-  using point_type = std::vector<double>;
-  using points_type = std::vector<point_type>;
-
 
  public:
 
@@ -93,7 +92,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 	return (result.second);
   }
 
-  Filtration_value simplex_filtration(const Simplex& simplex) {
+  Python_filtration_type simplex_filtration(const Simplex& simplex) {
 	return Base::filtration(Base::find(simplex));
   }
 
@@ -215,8 +214,11 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 	return std::make_pair(boundary_srange.begin(), boundary_srange.end());
   }
 
-  void reset_keys(){
-	unsigned int count = 0;
+
+
+// ######################## MULTIPERS STUFF
+  void set_keys_to_enumerate(){
+	int count = 0;
 	for (auto sh : Base::filtration_simplex_range())
 		Base::assign_key(sh, count++);
   }
@@ -253,7 +255,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 			simplex_list.push_back(simplex);
 		}
 	}
-	simplex_list.shrink_to_fit();
+/*	simplex_list.shrink_to_fit();*/
 	return simplex_list;
   }
   using edge_list = std::vector<std::pair<std::pair<int,int>, std::pair<double, double>>>;
@@ -269,33 +271,36 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 			simplex_list.push_back({simplex, {f[0], f[1]}});
 		}
 	}
-	simplex_list.shrink_to_fit();
+/*	simplex_list.shrink_to_fit();*/
 	return simplex_list;
   }
 
-  euler_chars_type euler_char(const std::vector<std::vector<double>> &point_list){ // TODO multi-critical 
-		const unsigned int npts = point_list.size();
+  euler_chars_type euler_char(std::vector<std::vector<options_multi::value_type>> &point_list){ // TODO multi-critical 
+		const int npts = point_list.size();
 		if (npts == 0){
 			return {};
 		}
-		const unsigned int nparameters = point_list[0].size();
+		using Gudhi::multi_filtrations::Finitely_critical_multi_filtration;
 		
 		euler_chars_type out(point_list.size(), 0.);
 
-		auto is_greater = [nparameters](const point_type &a, const point_type &b){ //french greater
-			for (unsigned int i = 0; i< nparameters; i++)
-				if( a[i] < b[i])
-					return false;
-			return true;
-		};
-#pragma omp parallel for
-		for (unsigned int i = 0; i< npts; i++){ // Maybe add a pragma here for parallel
+		// auto is_greater = [nparameters](const point_type &a, const point_type &b){ //french greater
+		// 	for (int i = 0; i< nparameters; i++)
+		// 		if( a[i] < b[i])
+		// 			return false;
+		// 	return true;
+		// };
+// #pragma omp parallel for
+		for (int i = 0; i< npts; i++){ // Maybe add a pragma here for parallel
 			auto &euler_char_at_point = out[i];
 // #pragma omp parallel for reduction(+:euler_char_at_point) // GUDHI : not possible, need a RANDOM ACCESS ITERATOR
 			for(const auto &SimplexHandle : Base::complex_simplex_range()){
-				const auto &pt = point_list[i]; 
-				const auto &filtration = Base::filtration(SimplexHandle);
-				if (is_greater(pt, filtration)){
+				// const Finitely_critical_multi_filtration<options_multi::value_type> &pt = *(Finitely_critical_multi_filtration<options_multi::value_type>*)(&point_list[i]);
+				options_multi::Filtration_value filtration = Base::filtration(SimplexHandle);
+				// const Finitely_critical_multi_filtration<options_multi::value_type> &filtration = *(Finitely_critical_multi_filtration<options_multi::value_type>*)(&filtration_);
+				Finitely_critical_multi_filtration<options_multi::value_type> pt(point_list[i]);
+				// if (is_greater(pt, filtration)){
+				if (filtration <= pt){
 					int sign = Base::dimension(SimplexHandle) %2 ? -1 : 1;  
 					euler_char_at_point += sign;
 				}
@@ -306,7 +311,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 	void resize_all_filtrations(int num){ //TODO : that is for 1 critical filtrations
 		if (num < 0)	return;
 		for(const auto &SimplexHandle : Base::complex_simplex_range()){
-			std::vector<double> new_filtration_value = Base::filtration(SimplexHandle);
+			std::vector<options_multi::value_type> new_filtration_value = Base::filtration(SimplexHandle);
 			new_filtration_value.resize(num);
 			Base::assign_filtration(SimplexHandle, new_filtration_value);
 		}

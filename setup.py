@@ -8,9 +8,9 @@ __license__ = ""
 # from distutils.extension import Extension
 from os.path import exists
 from multiprocessing import cpu_count
-from setuptools import Extension, setup
+from setuptools import Extension, setup, find_packages
 from Cython.Build import cythonize
-
+import numpy as np
 from Cython.Compiler import Options
 
 Options.docstrings = True
@@ -36,23 +36,20 @@ cythonize_flags = {
     # "show_all_warnings":True,
 }
 
-source_files = [
-	"main.pyx" if USE_CYTHON else "main.cpp"
-]
-
-extensions = [Extension('multipers',
-                        sources=source_files,
+extensions = [Extension(f"multipers.{module}",
+                        sources=[f"multipers/{module}.pyx"],
                         language='c++',
                         extra_compile_args=[
                             "-O3",
-                            "-march=native",
+                            #"-march=native",
                             # "-g0",
                             "-std=c++20",
-                            '-fopenmp',
+                            '-ltbb',
                             "-Wall"
                         ],
-                        extra_link_args=['-fopenmp'],
-                        )]
+                        extra_link_args=['-ltbb'],
+                        define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
+                        ) for module in ["simplex_tree_multi", "rank_invariant", "multiparameter_module_approximation"]]
 setup(
     name='multipers',
     author="David Loiseaux",
@@ -60,5 +57,6 @@ setup(
     description="Multiparameter persistence toolkit",
 	ext_modules=cythonize(
 		extensions, compiler_directives=cython_compiler_directives, **cythonize_flags),
-	include_dirs = ['.', "gudhi", "rank_invariant"],
+	packages=find_packages(),
+	include_dirs = ['multipers', "multipers/gudhi", np.get_include()],
 )

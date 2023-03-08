@@ -15,44 +15,47 @@
 #include <limits>
 #include <omp.h>
 #include <algorithm>
+#include "Simplex_tree_multi.h"
 
+namespace Gudhi::mma {
 
-namespace utils {
-
-constexpr bool verbose = false;
+bool verbose = false;
 
 using index = unsigned int;
-using value_type = double;
-using filtration_type = std::vector<value_type>;
+using value_type = Gudhi::Simplex_tree_options_multidimensional_filtration::value_type;
+using filtration_type = Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
 using multifiltration_type = std::vector<filtration_type>;
+using python_filtration_type = std::vector<value_type>;
+using python_multifiltration_type = std::vector<python_filtration_type>;
+
 using dimension_type = int;
 using persistence_pair = std::pair<value_type, value_type>;
 using boundary_type = std::vector<index>;
 using boundary_matrix = std::vector<boundary_type>;
-using permutation_type = std::vector<unsigned int>;
-using point_type = std::vector<value_type>;
-using corner_type = std::vector<value_type>;
-using corners_type = std::pair<std::vector<std::vector<value_type>>, std::vector<std::vector<value_type>>>;
-using bar = std::pair<corner_type, corner_type>;
-using multipers_barcode = std::vector<std::vector<double>>;
+using permutation_type = std::vector<std::size_t>;
+using point_type = Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
+using corner_type = Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
+using corners_type = std::pair<std::vector<corner_type>, std::vector<corner_type>>;
+using python_bar = std::pair<std::vector<value_type>, std::vector<value_type>>; // This type is for python
+using multipers_barcode = std::vector<std::vector<value_type>>;
 const value_type inf = std::numeric_limits<value_type>::infinity();
 const value_type negInf = -1 * inf;
 using interval_type = std::pair<point_type, point_type>;
 
-template<typename T>
-bool is_smaller(const std::vector<T>& x, const std::vector<T>& y)
-{
-    for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
-        if (x[i] > y[i]) return false;
-    return true;
-}
-template<typename T>
-bool is_greater(const std::vector<T>& x, const std::vector<T>& y)
-{
-    for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
-        if (x[i] < y[i]) return false;
-    return true;
-}
+// template<typename T>
+// bool is_smaller(const std::vector<T>& x, const std::vector<T>& y)
+// {
+//     for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
+//         if (x[i] > y[i]) return false;
+//     return true;
+// }
+// template<typename T>
+// bool is_greater(const std::vector<T>& x, const std::vector<T>& y)
+// {
+//     for (unsigned int i = 0; i < std::min(x.size(), y.size()); i++)
+//         if (x[i] < y[i]) return false;
+//     return true;
+// }
 
 
 
@@ -94,17 +97,17 @@ public:
     {}
 
     MultiDiagram_point(dimension_type dim,
-                  corner_type birth,
-                  corner_type death)
+                  filtration_type birth,
+                  filtration_type death)
     : dim(dim), birth(birth), death(death)
     {}
     dimension_type get_dimension() const {return dim;}
-    corner_type get_birth() const {return birth;}
-    corner_type get_death() const {return death;}
+    filtration_type get_birth() const {return birth;}
+    filtration_type get_death() const {return death;}
 private:
     dimension_type dim;
-    corner_type birth;
-    corner_type death;
+    filtration_type birth;
+    filtration_type death;
 
 };
 struct MultiDiagram{ // for python interface
@@ -113,12 +116,12 @@ public:
     MultiDiagram(){}
     MultiDiagram(std::vector<MultiDiagram_point>& m) : multiDiagram(m)
     {}
-    std::vector<bar> get_points(const dimension_type dimension = -1) const{ // dump for python interface
-        std::vector<bar> out;
+    std::vector<python_bar> get_points(const dimension_type dimension = -1) const{ // dump for python interface
+        std::vector<python_bar> out;
         out.reserve(multiDiagram.size());
         for (const MultiDiagram_point &pt : multiDiagram){
             if (dimension == -1 || pt.get_dimension() == dimension){
-                if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && pt.get_birth()[0] != utils::inf )
+                if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && pt.get_birth()[0] != Gudhi::mma::inf )
 					out.push_back({pt.get_birth(), pt.get_death()});
             }
         }
@@ -206,12 +209,12 @@ public:
     iterator begin() const {return this->multiDiagrams.begin();} // cython bug : iterators like bc in bcs crash)
     iterator end() const {return this->multiDiagrams.end();}
 
-	using barcodes = std::vector<std::vector<bar>>;
+	using barcodes = std::vector<std::vector<python_bar>>;
 	barcodes get_points(){
 		unsigned int nsummands = this->multiDiagrams.front().size();
         unsigned int nlines = this->multiDiagrams.size();
         // std::vector<std::vector<std::vector<double>>> out(nsummands, std::vector<std::vector<double>>(nlines, std::vector<double>(5)));
-        barcodes out(nlines, std::vector<bar>(nsummands));
+        barcodes out(nlines, std::vector<python_bar>(nsummands));
         for (unsigned int i = 0; i < nlines; i++){
             for(unsigned int j = 0; j < nsummands; j++){
                 const MultiDiagram_point &pt = this->multiDiagrams[i][j];
@@ -235,28 +238,28 @@ private:
         return true;
     }
 };
-} //namespace utils
+} //namespace Gudhi::mma
 
 
 
 
-namespace std{
-    template<typename T>
-    void sort(vector<T> &to_sort, bool(*compare)(const T&, const T&)){
-        std::sort(to_sort.begin(), to_sort.end(), compare);
-    }
-    template<typename T>
-    std::vector<T>& operator-=(std::vector<T> &result, const std::vector<T> &to_substract){
-        std::transform(result.begin(), result.end(), to_substract.begin(),result.begin(), std::minus<T>());
-        return result;
-    }
-    template<typename T>
-    std::vector<T>& operator+=(std::vector<T> &result, const std::vector<T> &to_add){
-        std::transform(result.begin(), result.end(), to_add.begin(),result.begin(), std::plus<T>());
-        return result;
-    }
 
-} // namespace std
+	// Different implementations of the matrix columns. Set seems to be the fastest in our tests.
+// using Vineyard_matrix_type = RU_matrix<Heap_column>;
+// using Vineyard_matrix_type = RU_matrix<List_column>;
+//  using Vineyard_matrix_type = RU_matrix<Vector_column>;
+// using Vineyard_matrix_type = RU_matrix<Unordered_set_column>;
+#include "ru_matrix.h"
+/*#include "heap_column.h"*/
+/*#include "list_column.h"*/
+//#include "list_column_2.h"
+/*#include "vector_column.h"*/
+#include "set_column.h"
+/*#include "unordered_set_column.h"*/
 
+
+namespace Gudhi::mma {
+using Vineyard_matrix_type = RU_matrix<Set_column>;
+}   
 
 #endif // UTILITIES_H

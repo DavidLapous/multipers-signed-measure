@@ -24,7 +24,7 @@
 
 #include <functional>
 
-namespace utils {
+namespace Gudhi::mma::Debug {
 
 using clk = std::chrono::high_resolution_clock;
 using tp = clk::time_point;

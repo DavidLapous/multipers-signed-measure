@@ -16,22 +16,24 @@
 #ifndef LINE_FILTRATION_TRANSLATION_H_INCLUDED
 #define LINE_FILTRATION_TRANSLATION_H_INCLUDED
 
-#include "utilities.h"
 #include "box.h"
+#include "finitely_critical_filtrations.h"
 
-namespace utils{
-	using point_type = std::vector<value_type>;
-	template<typename T=value_type>
+namespace Gudhi::multi_filtrations{
+
+	
+	template<typename T>
 	class Line
 	{
-	
+		
 	public:
+		using point_type = Finitely_critical_multi_filtration<T>;
 		Line();
 		Line(point_type x);
 		Line(point_type x, point_type v);
 		point_type push_forward(point_type x) const;
 		point_type push_back(point_type x) const;
-		dimension_type get_dim() const;
+		int get_dim() const;
 		std::pair<point_type, point_type> get_bounds(const Box<T> &box) const;
 
 
@@ -54,11 +56,11 @@ namespace utils{
 		this->direction_.swap(v);
 	}
 	template<typename T>
-	point_type Line<T>::push_forward(point_type x) const{ //TODO remove copy
+	typename Line<T>::point_type Line<T>::push_forward(point_type x) const { //TODO remove copy
 		x -= basepoint_;
-		value_type t=negInf;
-		for (unsigned int i = 0; i<x.size(); i++){
-			value_type dir  = this->direction_.size() > i ? direction_[i] : 1;
+		T t = - std::numeric_limits<T>::infinity();;
+		for (std::size_t i = 0; i<x.size(); i++){
+			T dir  = this->direction_.size() > i ? direction_[i] : 1;
 			t = std::max(t, x[i]/dir);
 		}
 		point_type out(basepoint_.size());
@@ -67,11 +69,11 @@ namespace utils{
 		return out;
 	}
 	template<typename T>
-	point_type Line<T>::push_back(point_type x) const{
+	typename Line<T>::point_type Line<T>::push_back(point_type x) const{
 		x -= basepoint_;
-		value_type t=inf;
+		T t = std::numeric_limits<T>::infinity();
 		for (unsigned int i = 0; i<x.size(); i++){
-			value_type dir  = this->direction_.size() > i ? direction_[i] : 1;
+			T dir  = this->direction_.size() > i ? direction_[i] : 1;
 			t = std::min(t, x[i]/dir);
 		}
 		point_type out(basepoint_.size());
@@ -80,15 +82,13 @@ namespace utils{
 		return out;
 	}
 	template<typename T>
-	dimension_type Line<T>::get_dim() const{
+	int Line<T>::get_dim() const{
 		return basepoint_.size();
 	}
 	template<typename T>
-	std::pair<point_type, point_type> Line<T>::get_bounds(const Box<T> &box) const{
+	std::pair<typename Line<T>::point_type, typename Line<T>::point_type> Line<T>::get_bounds(const Box<T> &box) const{
 		return {this->push_forward(box.get_bottom_corner()), this->push_back(box.get_upper_corner())};
 	}
-
-
 }
 
 #endif // LINE_FILTRATION_TRANSLATION_H_INCLUDED
