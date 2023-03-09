@@ -26,19 +26,25 @@ def rank_invariant2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, i
 	cdef intptr_t ptr = simplextree.thisptr
 	cdef int c_degree = degree
 	cdef vector[int] c_grid_shape = grid_shape
+	cdef vector[vector[vector[vector[int]]]] out
+	with nogil:
+		out = get_2drank_invariant(ptr, c_grid_shape, c_degree)
 #	cdef int I = grid_shape[0]
 #	cdef int J = grid_shape[1]
 #	cdef int[I][J][I][J] out_
 #	with nogil:
 #		out_ = get_2drank_invariant(ptr, c_grid_shape, c_degree)
-#	cdef cnp.ndarray[int, ndim=4] out = out_
-	return np.array(get_2drank_invariant(ptr, c_grid_shape, c_degree))
+#	
+	return np.array(out)
 
 def hilbert2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int degree):
 	cdef intptr_t ptr = simplextree.thisptr
 	cdef int c_degree = degree
 	cdef vector[int] c_grid_shape = grid_shape
-	return np.array(get_2Dhilbert(ptr, c_grid_shape, c_degree))
+	cdef vector[vector[int]] out
+	with nogil:
+		out = get_2Dhilbert(ptr, c_grid_shape, c_degree)
+	return np.array(out)
 
 
 

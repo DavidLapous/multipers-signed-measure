@@ -37,6 +37,7 @@ import numpy as np
 cnp.import_array()
 
 from multipers.simplex_tree_multi cimport *
+from multipers.multiparameter_module_approximation import module_approximation, PyModule
 cimport cython
 from gudhi import SimplexTree ## Small hack for typing
 
@@ -688,7 +689,7 @@ cdef class SimplexTreeMulti:
 			An interval decomposable module approximation of the module defined by the
 			homology of this multi-filtration.
 		"""
-		from gudhi import module_approximation, PyModule
+		from multipers.multiparameter_module_approximation import module_approximation, PyModule
 		if self.num_simplices() <= 0:
 			return PyModule()
 		f = None

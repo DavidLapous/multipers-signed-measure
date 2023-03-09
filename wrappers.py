@@ -68,7 +68,7 @@ class RipsDensity2SimplexTree(BaseEstimator, TransformerMixin):
 		with tqdm(X, desc="Computing simplextrees", disable= not self.progress and self.delayed) as data:
 			if self.delayed:
 				return [delayed(get_st)(x) for x in data] # delay the computation for the to_module pipe
-			return [get_st(x) for x in data] # No parallel possible here unless Gudhi serialize simplextrees.
+			return Parallel(n_jobs=-1, prefer="threads")(delayed(get_st)(x) for x in data) # No parallel possible afterward unless Gudhi serialize simplextrees.
 			
 
 

@@ -148,7 +148,7 @@ rank_tensor get_2drank_invariant(const intptr_t simplextree_ptr, const std::vect
 			}
 			auto elbow = get_elbow(i,j,I,J);
 /*				if constexpr(verbose) std::cout << "Computed elbow : " << elbow << std::endl;*/
-			Barcode barcode = compute_dgm(st, degree);
+			const Barcode &barcode = compute_dgm(st, degree);
 			for(const auto &bar : barcode){
 				int birth = bar.first;
 				int death = bar.second == std::numeric_limits<Simplex_tree_std::Filtration_value>::infinity() ? I+J-1: bar.second; // TODO FIXME 
@@ -220,38 +220,49 @@ grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &gri
 	// std::cout << I <<" " << J << std::endl;
 	Simplex_tree_std _st;
 	flatten((intptr_t)(&st_multi), (intptr_t)(&_st),0U); // copies the st_multi to a standard 1-pers simplextree
-	#pragma omp parallel shared(out)
-	{
-		Simplex_tree_std st(_st); // copy for each core
-		std::vector<int> vertices(st.dimension());
+	
+	
+	// #pragma omp for collapse(2)
+	// for (int i = 0 ; i < I; i++){
+	// 	for(int j = 0 ; j < J; j++){
+	
+	// #pragma omp parallel shared(out)
+	// {
+	// 	Simplex_tree_std st(_st); // copy for each core
+	// 	std::vector<int> vertices(st.dimension());
 
-		#pragma omp for
-		for (int height = 0 ; height < J; height++){
+	// 	#pragma omp for
+	// 	for (int height = 0 ; height < J; height++){
 			// assigns simplices values 
-			for (auto &sh : st_multi.complex_simplex_range()){
-				vertices.resize(0);
-				for(const auto &vertex : st_multi.simplex_vertex_range(sh))
-					vertices.push_back(vertex);
-				const auto &multi_filtration = st_multi.filtration(sh);
-				value_type elbow_filtration = horizontal_line_filtration(multi_filtration, height);
-				auto st_handle = st.find(vertices);
-				st.assign_filtration(st_handle, elbow_filtration);
-			}
-			Barcode barcode = compute_dgm(st, degree);
-			for(const auto &bar : barcode){
-				float birth = bar.first;
-				if (birth > I) // some birth can be infinite
-					continue; 
-				int death = bar.second > I ? I-1: bar.second; // TODO FIXME 
-				// std::cout << birth << " " << death << "  " << I << " " << J << std::endl;
-				for (int index = birth; index <= death; index ++){
-					// if (index < 0)
-					// 	std::cout << birth <<"   "<< index << " " << height << "  " << I << " " << J << std::endl;
-					out[index][height]++;
-				}
+	tbb::enumerable_thread_specific< std::pair<Simplex_tree_std, std::vector<int>> > ets;
+	tbb::parallel_for(0, I,[&](int height){
+		auto &thread_temporary_variables = ets.local();
+		Simplex_tree_std &st = thread_temporary_variables.first;
+		auto &vertices = thread_temporary_variables.second;
+		if (st.num_simplices() == 0){ st = _st;}
+		for (auto &sh : st_multi.complex_simplex_range()){
+			vertices.resize(0);
+			for(const auto &vertex : st_multi.simplex_vertex_range(sh))
+				vertices.push_back(vertex);
+			const auto &multi_filtration = st_multi.filtration(sh);
+			value_type elbow_filtration = horizontal_line_filtration(multi_filtration, height);
+			auto st_handle = st.find(vertices);
+			st.assign_filtration(st_handle, elbow_filtration);
+		}
+		const Barcode &barcode = compute_dgm(st, degree);
+		for(const auto &bar : barcode){
+			float birth = bar.first;
+			if (birth > I) // some birth can be infinite
+				continue; 
+			int death = bar.second > I ? I-1: bar.second; // TODO FIXME 
+			// std::cout << birth << " " << death << "  " << I << " " << J << std::endl;
+			for (int index = birth; index <= death; index ++){
+				// if (index < 0)
+				// 	std::cout << birth <<"   "<< index << " " << height << "  " << I << " " << J << std::endl;
+				out[index][height]++;
 			}
 		}
-	}
+	});
 	return out;
 	
 }
