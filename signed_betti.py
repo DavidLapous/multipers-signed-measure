@@ -2,40 +2,60 @@ import numpy as np
 import itertools
 from itertools import product
 import matplotlib.pyplot as plt
+from scipy.sparse import coo_array
+
+def signed_betti(hilbert_function, threshold=False, sparse=False):
+    # number of dimensions
+    n = len(hilbert_function.shape)
+    # pad with zeros at the end so np.roll does not roll over
+    hf_padded = np.pad(hilbert_function, [[0, 1]] * n)
+    if threshold:
+        # zero out the "end" of the Hilbert function
+        for dimension in range(n):
+            slicer = tuple([slice(None) if i != dimension else -2 for i in range(n)])
+            hf_padded[slicer] = 0
+    # all relevant shifts (e.g., if n=2, (0,0), (0,1), (1,0), (1,1))
+    shifts = np.array(list(itertools.product([0, 1], repeat=n)))
+    bn = np.zeros(hf_padded.shape)
+    for shift in shifts:
+        bn += ((-1) ** np.sum(shift)) * np.roll(hf_padded, shift, axis=range(n))
+    # remove the padding
+    slices = np.ix_(*[range(0, hilbert_function.shape[i]) for i in range(n)])
+    bn_unpadded = bn[slices]
+    if sparse:
+        return coo_array(bn_unpadded, dtype=int)
+    else:
+        return bn_unpadded
 
 
-def signed_betti(hilbert_function):
-	# number of dimensions
-	n = len(hilbert_function.shape)
-	# pad with zeros at the end so np.roll does not roll over
-	hf_padded = np.pad(hilbert_function, [[0, 1]]*n)
-	# all relevant shifts (e.g., if n=2, (0,0), (0,1), (1,0), (1,1))
-	shifts = np.array(list(itertools.product([0, 1], repeat=n)))
-	bn = np.zeros(hf_padded.shape)
-	for shift in shifts:
-		bn += ((-1)**np.sum(shift)) * np.roll(hf_padded, shift, axis=range(n))
-	# remove the padding
-	slices = np.ix_(*[range(0, hilbert_function.shape[i]) for i in range(n)])
-	return bn[slices]
-
-
-def rank_decomposition_by_rectangles(rank_invariant):
-	# takes as input the rank invariant of an n-parameter persistence module
-	#   M  :  [0, ..., s_1 - 1] x ... x [0, ..., s_n - 1]  --->  Vec
-	# on a grid with dimensions of sizes s_1, ..., s_n. The input is assumed to be
-	# given as a tensor of dimensions (s_1, ..., s_n, s_1, ..., s_n), so that,
-	# at index [i_1, ..., i_n, j_1, ..., j_n] we have the rank of the structure
-	# map M(i) -> M(j), where i = (i_1, ..., i_n) and j = (j_1, ..., j_n), and
-	# i <= j, meaning that i_1 <= j_1, ..., i_n <= j_n.
-	# NOTE :
-	#   - About the input, we assume that, if not( i <= j ), then at index
-	#     [i_1, ..., i_n, j_1, ..., j_n] we have a zero.
-	#   - Similarly, the output at index [i_1, ..., i_n, j_1, ..., j_n] only
-	#     makes sense when i <= j. For indices where not( i <= j ) the output
-	#     may take arbitrary values and they should be ignored.
-	n = len(rank_invariant.shape)//2
-	to_flip = tuple(range(n, 2 * n))
-	return np.flip(signed_betti(np.flip(rank_invariant, to_flip)), to_flip)
+def rank_decomposition_by_rectangles(rank_invariant, threshold=False):
+    # takes as input the rank invariant of an n-parameter persistence module
+    #   M  :  [0, ..., s_1 - 1] x ... x [0, ..., s_n - 1]  --->  Vec
+    # on a grid with dimensions of sizes s_1, ..., s_n. The input is assumed to be
+    # given as a tensor of dimensions (s_1, ..., s_n, s_1, ..., s_n), so that,
+    # at index [i_1, ..., i_n, j_1, ..., j_n] we have the rank of the structure
+    # map M(i) -> M(j), where i = (i_1, ..., i_n) and j = (j_1, ..., j_n), and
+    # i <= j, meaning that i_1 <= j_1, ..., i_n <= j_n.
+    # NOTE :
+    #   - About the input, we assume that, if not( i <= j ), then at index
+    #     [i_1, ..., i_n, j_1, ..., j_n] we have a zero.
+    #   - Similarly, the output at index [i_1, ..., i_n, j_1, ..., j_n] only
+    #     makes sense when i <= j. For indices where not( i <= j ) the output
+    #     may take arbitrary values and they should be ignored.
+    n = len(rank_invariant.shape) // 2
+    if threshold:
+        rank_invariant = rank_invariant.copy()
+        print(rank_invariant)
+        # zero out the "end"
+        for dimension in range(n):
+            slicer = tuple(
+                [slice(None) for _ in range(n)]
+                + [slice(None) if i != dimension else -1 for i in range(n)]
+            )
+            rank_invariant[slicer] = 0
+        # print(rank_invariant)
+    to_flip = tuple(range(n, 2 * n))
+    return np.flip(signed_betti(np.flip(rank_invariant, to_flip)), to_flip)
 
 
 def tensor_to_rectangle(betti:np.ndarray, plot = False, grid_conversion=None):
@@ -90,17 +110,19 @@ def tensor_to_rectangle(betti:np.ndarray, plot = False, grid_conversion=None):
 			plt.plot([b1,d1], [b2,d2], c=c)
 	return rectangle_list
 
-def betti_matrix2signed_measure(betti, grid_conversion=None):
-	if grid_conversion is  None:
-		return np.asarray([
-				[*indices, betti[*indices]]
-				for indices in product(*[range(i) for i in betti.shape])
-				if betti[*indices] != 0
-			], dtype=int)
-	return np.asarray([[*[grid_conversion[parameter][coord] for parameter, coord in enumerate(indices)], betti[*indices]]
-			for indices in product(*[range(i) for i in betti.shape])
-			if betti[*indices] != 0 ], dtype=float)
-
+def betti_matrix2signed_measure(betti:coo_array|np.ndarray, grid_conversion:Iterable[np.ndarray]|None = None):
+    if isinstance(betti, np.ndarray):   betti = coo_array(betti)
+    points_filtration = np.empty(shape=(betti.getnnz(),2), dtype=int) # coo matrix is only for matrices -> 2d
+    points_filtration[:,0] = betti.row
+    points_filtration[:,1] = betti.col
+    weights = betti.data
+    if grid_conversion is not None:
+        coords = np.empty(shape=(betti.getnnz(),2), dtype=float)
+        for i in range(2):
+            coords[:,i] = grid_conversion[i][points_filtration[:,i]]
+    else:
+        coords = points_filtration
+    return coords, weights
 
 # only tests rank functions with 1 and 2 parameters
 def test_rank_decomposition():

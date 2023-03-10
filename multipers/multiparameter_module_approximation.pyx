@@ -712,12 +712,6 @@ def plot2d(corners, box = [],*,dimension=-1, separated=False, min_persistence = 
 
 #################################################### DATASETS for test
 
-import numpy as np
-import mma
-import gudhi as gd
-from sympy.ntheory import factorint 
-
-
 def noisy_annulus(r1:float=1, r2:float=2, n1:int=1000,n2:int=200, dim:int=2, center:np.ndarray|list|None=None, **kwargs)->np.ndarray:
 	"""Generates a noisy annulus dataset.
 
@@ -795,6 +789,7 @@ def test_module(**kwargs):
 def nlines_precision_box(nlines, basepoint, scale, square = False):
 	import math
 	from random import choice, shuffle
+	from sympy.ntheory import factorint
 	h = scale
 	dim = len(basepoint)
 	basepoint = np.array(basepoint, 'double')

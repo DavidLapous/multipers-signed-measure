@@ -32,7 +32,7 @@ cython_compiler_directives = {
 
 cythonize_flags = {
     # "depfile":True,
-    "nthreads": (int)(max(1, cpu_count()//2)),
+    "nthreads": (int)((cpu_count()//2) + 1),
     # "show_all_warnings":True,
 }
 
