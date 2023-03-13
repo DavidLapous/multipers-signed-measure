@@ -231,10 +231,11 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 	Base::assign_key(Base::find(simplex), key);
 	return;
   }
-  void fill_lowerstar(std::vector<double> filtration, int axis){
+  void fill_lowerstar(std::vector<options_multi::value_type> filtration, int axis){
+	using value_type=options_multi::value_type;
 	for (auto &SimplexHandle : Base::complex_simplex_range()){
-		std::vector<double> current_birth = Base::filtration(SimplexHandle);
-		double to_assign = -1*std::numeric_limits<double>::infinity();
+		std::vector<value_type> current_birth = Base::filtration(SimplexHandle);
+		value_type to_assign = -1*std::numeric_limits<value_type>::infinity();
 		for (auto vertex : Base::simplex_vertex_range(SimplexHandle)){
 			to_assign = std::max(filtration[vertex], to_assign);
 		}

@@ -46,7 +46,6 @@ from gudhi import SimplexTree ## Small hack for typing
 
 from warnings import warn
 
-ctypedef double value_type
 
 cdef extern from "Simplex_tree_multi.h" namespace "Gudhi":
 	void multify(const uintptr_t, const uintptr_t, const unsigned int) nogil except +
@@ -303,7 +302,7 @@ cdef class SimplexTreeMulti:
 		cdef Py_ssize_t i
 		cdef Py_ssize_t j
 		cdef vector[int] v
-		cdef vector[double] w
+		cdef vector[value_type] w
 		cdef int n_parameters = self.num_parameters
 		with nogil:
 			# Without this, it we end up inserting vertic could be slow ifes in a bad order (flat_map).

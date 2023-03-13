@@ -19,7 +19,8 @@ __copyright__ = "Copyright (C) 2016 Inria"
 __license__ = "MIT"
 
 ctypedef int dimension_type
-ctypedef vector[double] filtration_type
+ctypedef float value_type
+ctypedef vector[value_type] filtration_type
 ctypedef vector[int] simplex_type
 ctypedef vector[simplex_type] simplex_list
 ctypedef vector[pair[pair[int,int], pair[double, double]]] edge_list 
@@ -27,10 +28,11 @@ ctypedef vector[int] euler_char_list
 
 
 
+
 cdef extern from "multi_filtrations/finitely_critical_filtrations.h" namespace "Gudhi::multi_filtrations":
 	cdef cppclass Finitely_critical_multi_filtration "Gudhi::multi_filtrations::Finitely_critical_multi_filtration<Gudhi::Simplex_tree_options_multidimensional_filtration::value_type>":
 		Finitely_critical_multi_filtration() nogil except +
-		Finitely_critical_multi_filtration(vector[double]) except +
+		Finitely_critical_multi_filtration(vector[value_type]) except +
 		Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&)
 		filtration_type& get_vector()  nogil
 		int size() nogil
@@ -102,7 +104,7 @@ cdef extern from "Simplex_tree_interface_multi.h" namespace "Gudhi":
 		void set_keys_to_enumerate() nogil
 		int get_key(const simplex_type) nogil
 		void set_key(simplex_type, int) nogil
-		void fill_lowerstar(vector[double], int) nogil
+		void fill_lowerstar(vector[value_type], int) nogil
 		simplex_list get_simplices_of_dimension(int) nogil
 		edge_list get_edge_list() nogil
 		euler_char_list euler_char(vector[filtration_type]) nogil

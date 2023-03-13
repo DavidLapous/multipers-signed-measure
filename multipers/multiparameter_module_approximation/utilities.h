@@ -128,8 +128,8 @@ public:
         out.shrink_to_fit();
         return out;
     }
-    std::vector<std::vector<double>> to_multipers(const dimension_type dimension = -1) const{ // dump for python interface
-        std::vector<std::vector<double>> out;
+    std::vector<std::vector<value_type>> to_multipers(const dimension_type dimension = -1) const{ // dump for python interface
+        std::vector<std::vector<value_type>> out;
         out.reserve(multiDiagram.size());
         for (const MultiDiagram_point &pt : multiDiagram){
             if (pt.get_dimension() == dimension){
@@ -160,26 +160,27 @@ public:
     using nciterator = std::vector<MultiDiagram>::iterator;
     MultiDiagrams() {}
     MultiDiagrams(unsigned int size) : multiDiagrams(size) {}
-    std::vector<std::vector<std::vector<double>>> to_multipers(){
+
+    std::vector<std::vector<std::vector<value_type>>> to_multipers(){
         unsigned int nsummands = this->multiDiagrams.front().size();
         unsigned int nlines = this->multiDiagrams.size();
         // std::vector<std::vector<std::vector<double>>> out(nsummands, std::vector<std::vector<double>>(nlines, std::vector<double>(5)));
-        std::vector<std::vector<std::vector<double>>> out(nsummands);
+        std::vector<std::vector<std::vector<value_type>>> out(nsummands);
         for (unsigned int i = 0; i < nsummands; i++){
             out[i].reserve(nlines);
             for(unsigned int j = 0; j < nlines; j++){
                 const MultiDiagram_point &pt = this->multiDiagrams[j][i];
                 if(_is_inf(pt.get_birth()) || _is_negInf(pt.get_death()))
-                    out[i].push_back({0, 0, 0, 0,static_cast<double>(j)});
+                    out[i].push_back({0, 0, 0, 0,static_cast<value_type>(j)});
                 else
-                    out[i].push_back({pt.get_birth()[0], pt.get_death()[0], pt.get_birth()[1], pt.get_death()[1],static_cast<double>(j)});
+                    out[i].push_back({pt.get_birth()[0], pt.get_death()[0], pt.get_birth()[1], pt.get_death()[1],static_cast<value_type>(j)});
             }
             out[i].shrink_to_fit();
         }
         return out;
     }
     using __for_python_plot_type = std::pair<std::vector<std::pair<value_type, value_type>>,std::vector<unsigned int>>;
-    __for_python_plot_type _for_python_plot(dimension_type dimension=-1, double min_persistence=0){
+    __for_python_plot_type _for_python_plot(dimension_type dimension=-1, value_type min_persistence=0){
         __for_python_plot_type out;
         auto& bars = out.first;
         auto& summand_idx= out.second;

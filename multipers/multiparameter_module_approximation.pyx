@@ -346,7 +346,7 @@ cdef class PyModule:
 		elif basepoints is None:
 			h = box[1][1] - box[0][1]
 			basepoints = np.linspace([box[0][0] - h,box[0][1]], [box[1][0],box[0][1]], num=num) 
-		cdef cnp.ndarray[double, ndim=1] view_basepoint
+		cdef cnp.ndarray[value_type, ndim=1] view_basepoint
 		cdef vector[cfiltration_type] cbasepoints
 		for i in range(num):
 			view_basepoint = basepoints[i]
@@ -580,7 +580,7 @@ def module_approximation(
 	approx_mod = PyModule()
 	cdef vector[Finitely_critical_multi_filtration] c_filtration = Finitely_critical_multi_filtration.from_python(filtration)
 	cdef boundary_matrix c_boundary = boundary
-	cdef double c_max_error = max_error
+	cdef value_type c_max_error = max_error
 	cdef bool c_threshold = threshold
 	cdef bool c_complete = complete
 	cdef bool c_multithread = multithread
@@ -792,11 +792,11 @@ def nlines_precision_box(nlines, basepoint, scale, square = False):
 	from sympy.ntheory import factorint
 	h = scale
 	dim = len(basepoint)
-	basepoint = np.array(basepoint, 'double')
+	basepoint = np.array(basepoint)
 	if square:
 		# here we want n^dim-1 lines (n = nlines)
 		n=nlines
-		basepoint = np.array(basepoint, 'double')
+		basepoint = np.array(basepoint)
 		deathpoint = basepoint.copy()
 		deathpoint+=n*h + - h/2
 		deathpoint[-1] = basepoint[-1]+h/2

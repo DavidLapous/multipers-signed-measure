@@ -17,10 +17,23 @@
 #include <tbb/enumerable_thread_specific.h>
 
 namespace Gudhi::rank_invariant{
+
+struct Simplex_tree_float { // smaller simplextrees
+  typedef linear_indexing_tag Indexing_tag;
+  typedef int Vertex_handle;
+  typedef float Filtration_value;
+  typedef std::uint32_t Simplex_key;
+  static const bool store_key = true;
+  static const bool store_filtration = true;
+  static const bool contiguous_vertices = false;
+};
+
 using multi_filtrations::Box;
-using Simplex_tree_std = Simplex_tree<Simplex_tree_options_full_featured>;
+using Simplex_tree_std = Simplex_tree<Simplex_tree_float>;
 using Simplex_tree_multi = Simplex_tree<Simplex_tree_options_multidimensional_filtration>;
 using value_type = Simplex_tree_options_multidimensional_filtration::Filtration_value::value_type;
+
+
 
 
 
@@ -28,27 +41,31 @@ template<typename T=int>
 using Rectangle = std::tuple<std::vector<T>, std::vector<T>, int>;
 
 
-inline std::vector<value_type> project_to_elbow(const std::vector<value_type> &x, value_type i, value_type j, value_type I, value_type J){
-	Box<value_type> top_left_zone({0,j+1}, {i-1,J-1});
-	Box<value_type> bottom_left_zone({1,0}, {i,j-1});
-	Box<value_type> right_zone({i+1,0}, {I-1,J-1});
-	auto projection = x;
-	if (bottom_left_zone.contains(x))
-		projection[1] = j;
+inline void project_to_elbow(std::vector<value_type> &to_project, value_type i, value_type j, value_type I, value_type J){
+	// Box<value_type> top_left_zone(0,j+1, i-1,J-1);
+	// Box<value_type> bottom_left_zone(1,0, i,j-1);
+	// Box<value_type> right_zone(i+1,0,I-1,J-1);
+	Box<value_type> zone(1,0, i,j-1); // Bottom left zone
+	auto &birth = zone.get_bottom_corner();
+	auto &death = zone.get_upper_corner();
+	if (zone.contains(to_project)){
+		to_project[1] = j;
 		// projection = {x[0], j};
-
-	else if (top_left_zone.contains(x))
-		projection[0] = i;
+		return;
+	}
+	birth[0] = 0; birth[1] = j+1; death[0] = i-1; death[1] = J-1;
+	if (zone.contains(to_project)) //top left zone
+		{to_project[0] = i; return;}
 		// projection = {i,x[1]};
-
-	else if (right_zone.contains(x))
-		projection[1] = J-1;
+	birth[0] = i+1; birth[1] = 0; death[0] = I-1; //death[1] = J-1;
+	if (zone.contains(to_project)) //right zone
+		{to_project[1] = J-1; return;}
 		// projection = {x[0], J-1};
-	
-	// if (close_top && projection[1] == j){
-	// 	projection[1] = j+0.1;
-	// }
-	return projection;
+	return;
+	// // if (close_top && projection[1] == j){
+	// // 	projection[1] = j+0.1;
+	// // }
+	// return to_project;
 }
 
 using Barcode = std::vector<std::pair<value_type, value_type>>;
@@ -59,7 +76,7 @@ inline Barcode compute_dgm(Simplex_tree_std &st, int degree){
 	st.initialize_filtration();
 	constexpr int coeff_field_characteristic = 2;
 	constexpr int min_persistence = 0;
-	Gudhi::persistent_cohomology::Persistent_cohomology<Gudhi::Simplex_tree<>, Gudhi::persistent_cohomology::Field_Zp> pcoh(st);
+	Gudhi::persistent_cohomology::Persistent_cohomology<Simplex_tree_std, Gudhi::persistent_cohomology::Field_Zp> pcoh(st);
 	pcoh.init_coefficients(coeff_field_characteristic);
 	pcoh.compute_persistent_cohomology(min_persistence);
 	auto persistent_pairs = pcoh.intervals_in_dimension(degree);
@@ -112,7 +129,7 @@ rank_tensor get_2drank_invariant(const intptr_t simplextree_ptr, const std::vect
 					J,0)))); // zero of good size
 	// std::cout << I <<" " << J << std::endl;
 	Simplex_tree_std st_;
-	flatten((intptr_t)(&st_multi), (intptr_t)(&st_),0U); // copies the st_multi to a standard 1-pers simplextree
+	flatten(st_, st_multi,0U); // copies the st_multi to a standard 1-pers simplextree
 	
 	// #pragma omp parallel shared(out)
 	// {
@@ -134,16 +151,16 @@ rank_tensor get_2drank_invariant(const intptr_t simplextree_ptr, const std::vect
 			if (st.num_simplices() == 0){ st = st_;}
 			if constexpr (verbose) std::cout <<"\nElbow : "<<  i << " " << j << std::endl;
 			for (auto &sh : st_multi.complex_simplex_range()){
-				vertices.resize(0);
+				auto multi_filtration = st_multi.filtration(sh);
+				// auto int_multi_filtration = std::vector<int>(multi_filtration.begin(), multi_filtration.end());
+				project_to_elbow(multi_filtration,i ,j, I,J);
+				// if constexpr(verbose) std::cout << "Projection : " << multi_filtration << " to " << projection_to_elbow << std::endl; 
+				auto elbow_filtration = multi_filtration[0] + multi_filtration[1];
+				
+				vertices.clear();
 				for(const auto &vertex : st_multi.simplex_vertex_range(sh))
 					vertices.push_back(vertex);
-				const auto &multi_filtration = st_multi.filtration(sh);
-				// auto int_multi_filtration = std::vector<int>(multi_filtration.begin(), multi_filtration.end());
-				auto projection_to_elbow = project_to_elbow(multi_filtration,i ,j, I,J);
-				// if constexpr(verbose) std::cout << "Projection : " << multi_filtration << " to " << projection_to_elbow << std::endl; 
-				value_type elbow_filtration = std::reduce(projection_to_elbow.begin(), projection_to_elbow.end()); // sum
-				// int elbow_filtration = projection_to_elbow[0] + projection_to_elbow[1];
-				auto st_handle = st.find(vertices);
+				auto st_handle = st.find(vertices); // TODO : ask Marc / Vincent if it is possible to iterate on both st at the same time (they are the same !)
 				st.assign_filtration(st_handle, elbow_filtration);
 			}
 			auto elbow = get_elbow(i,j,I,J);
@@ -209,7 +226,8 @@ inline value_type horizontal_line_filtration(const std::vector<value_type> &x, v
 
 using grid2d = std::vector<std::vector<int>>;
 grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &grid_shape, const int degree){
-	Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
+	// Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
+	auto &st_multi = get_simplextree_from_pointer<options_multi>(simplextree_ptr);
 	if (grid_shape.size() != 2){
 		std::cerr << "Use a 2d grid shape."<<std::endl;
 		return grid2d();
@@ -219,7 +237,7 @@ grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &gri
 	grid2d out(I, std::vector<int>(J,0)); // zero of good size
 	// std::cout << I <<" " << J << std::endl;
 	Simplex_tree_std _st;
-	flatten((intptr_t)(&st_multi), (intptr_t)(&_st),0U); // copies the st_multi to a standard 1-pers simplextree
+	flatten(_st, st_multi,0U); // copies the st_multi to a standard 1-pers simplextree
 	
 	
 	// #pragma omp for collapse(2)
@@ -241,7 +259,7 @@ grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &gri
 		auto &vertices = thread_temporary_variables.second;
 		if (st.num_simplices() == 0){ st = _st;}
 		for (auto &sh : st_multi.complex_simplex_range()){
-			vertices.resize(0);
+			vertices.clear();
 			for(const auto &vertex : st_multi.simplex_vertex_range(sh))
 				vertices.push_back(vertex);
 			const auto &multi_filtration = st_multi.filtration(sh);
@@ -251,7 +269,7 @@ grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &gri
 		}
 		const Barcode &barcode = compute_dgm(st, degree);
 		for(const auto &bar : barcode){
-			float birth = bar.first;
+			auto birth = bar.first;
 			if (birth > I) // some birth can be infinite
 				continue; 
 			int death = bar.second > I ? I-1: bar.second; // TODO FIXME 

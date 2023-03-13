@@ -3,8 +3,7 @@ from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp cimport tuple
 
-ctypedef double value_type
- 
+ctypedef float value_type
 
 ctypedef pair[vector[value_type],vector[value_type]] interval
 ctypedef vector[value_type] corner_type
@@ -35,7 +34,7 @@ ctypedef vector[int] simplex_type
 cdef extern from "multi_filtrations/finitely_critical_filtrations.h" namespace "Gudhi::multi_filtrations":
 	cdef cppclass Finitely_critical_multi_filtration "Gudhi::multi_filtrations::Finitely_critical_multi_filtration<Gudhi::Simplex_tree_options_multidimensional_filtration::value_type>":
 		Finitely_critical_multi_filtration() nogil except +
-		Finitely_critical_multi_filtration(vector[double]) except +
+		Finitely_critical_multi_filtration(vector[value_type]) except +
 		Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&) except +
 		filtration_type& get_vector() nogil const 
 		int size() nogil
