@@ -263,7 +263,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
   edge_list get_edge_list(){
 	edge_list simplex_list;
 	simplex_list.reserve(Base::num_simplices());
-	for (auto &simplexHandle : Base::skeleton_simplex_range(2)){
+	for (auto &simplexHandle : Base::skeleton_simplex_range(1)){
 		if (Base::dimension(simplexHandle) == 1){
 			std::pair<int,int> simplex;
 			auto it = Base::simplex_vertex_range(simplexHandle).begin();

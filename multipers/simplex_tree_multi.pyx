@@ -294,11 +294,11 @@ cdef class SimplexTreeMulti:
 		:type filtrations: numpy.array of shape (n,num_parameters)
 		"""
 		# TODO : multi-critical
-		cdef vector[int] vertices = np.unique(vertex_array)
+		# cdef vector[int] vertices = np.unique(vertex_array)
 		cdef Py_ssize_t k = vertex_array.shape[0]
 		cdef Py_ssize_t n = vertex_array.shape[1]
 		assert filtrations.shape[0] == n, 'inconsistent sizes for vertex_array and filtrations'
-		assert filtrations.shape[1] == self.num_parameters
+		assert filtrations.shape[1] == self.num_parameters, "wrong number of parameters"
 		cdef Py_ssize_t i
 		cdef Py_ssize_t j
 		cdef vector[int] v
@@ -701,8 +701,8 @@ cdef class SimplexTreeMulti:
 		
 		
 ## This function is only meant for the edge collapse interface.
-#	def get_edge_list(self):
-#		return self.get_ptr().get_edge_list()
+	def get_edge_list(self):
+		return self.get_ptr().get_edge_list()
 	
 	def collapse_edges(self, max_dimension:int=None, num:int=1, progress:bool=False, strong:bool=True, full:bool=False, ignore_warning:bool=False):
 		"""Edge collapse for 1-critical 2-parameter clique complex (see https://arxiv.org/abs/2211.05574).
