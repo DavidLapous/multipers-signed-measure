@@ -287,6 +287,30 @@ grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &gri
 
 
 
+using grid2d = std::vector<std::vector<int>>;
+grid2d get_euler2d(const intptr_t simplextree_ptr, const std::vector<int> &grid_shape){
+	// Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
+	auto &st_multi = get_simplextree_from_pointer<options_multi>(simplextree_ptr);
+	if (grid_shape.size() != 2){
+		std::cerr << "Use a 2d grid shape."<<std::endl;
+		return grid2d();
+	}
+		
+	int I = grid_shape[0], J = grid_shape[1];
+	grid2d out(I, std::vector<int>(J,0)); // zero of good size
+	// std::cout << I <<" " << J << std::endl;
+	for (auto &sh : st_multi.complex_simplex_range()){
+		auto filtration = st_multi.filtration((sh));
+		int sign = 1- 2*(st_multi.dimension(sh) % 2);
+		for (int i=filtration[0]; i<I; i++)
+			for (int j = filtration[1]; j<J; j++)
+				out[i][j] += sign;
+	}
+	return out;
+}
+
+
+
 
 
 // std::vector<Rectangle<int>> signed_barcode(const rank_tensor &rank_invariant){

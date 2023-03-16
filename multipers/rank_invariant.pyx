@@ -14,6 +14,7 @@ from itertools import product
 cdef extern from "multi_parameter_rank_invariant/rank_invariant.h" namespace "Gudhi::rank_invariant":
 	rank2 get_2drank_invariant(const intptr_t, const vector[int]&, const int) nogil
 	grid2D get_2Dhilbert(const intptr_t, const vector[int]&, const int) nogil
+	grid2D get_euler2d(const intptr_t, const vector[int]&) nogil
 
 from multipers.simplex_tree_multi import SimplexTreeMulti # Typing hack
 
@@ -44,6 +45,14 @@ def hilbert2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int degr
 	cdef vector[vector[int]] out
 	with nogil:
 		out = get_2Dhilbert(ptr, c_grid_shape, c_degree)
+	return np.array(out)
+
+def euler2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list):
+	cdef intptr_t ptr = simplextree.thisptr
+	cdef vector[int] c_grid_shape = grid_shape
+	cdef vector[vector[int]] out
+	with nogil:
+		out = get_euler2d(ptr, c_grid_shape)
 	return np.array(out)
 
 
