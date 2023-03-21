@@ -1427,12 +1427,24 @@ class Simplex_tree {
     for (auto& simplex : boost::adaptors::reverse(sib->members())) {
       // Find the maximum filtration value in the border
       Boundary_simplex_range boundary = boundary_simplex_range(&simplex);
-      Boundary_simplex_iterator max_border = std::max_element(std::begin(boundary), std::end(boundary),
+      Filtration_value max_filt_border_value;
+      if (this->number_of_parameters_ <= 1){
+        Boundary_simplex_iterator max_border = std::max_element(std::begin(boundary), std::end(boundary),
                                                               [](Simplex_handle sh1, Simplex_handle sh2) {
                                                                 return filtration(sh1) < filtration(sh2);
                                                               });
 
-      Filtration_value max_filt_border_value = filtration(*max_border);
+        max_filt_border_value = filtration(*max_border);
+      }
+      else{
+        // not sure if this will compile with simplextree std
+        // in that case, we assume that Filtration_value has a max member to handle this.
+        max_filt_border_value = Filtration_value(this->number_of_parameters_, -std::numeric_limits<typename Filtration_value::value_type>::infinity());
+        for (auto &sh : boundary){
+          max_filt_border_value.push_to(filtration(sh)); // pushes the value of max_filt_border_value to reach simplex' filtration
+        }
+      }
+      
       // Replacing if(f<max) with if(!(f>=max)) would mean that if f is NaN, we replace it with the max of the children.
       // That seems more useful than keeping NaN.
       if (!(simplex.second.filtration() >= max_filt_border_value)) {

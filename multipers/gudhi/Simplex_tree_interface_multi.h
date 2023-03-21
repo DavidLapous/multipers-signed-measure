@@ -275,7 +275,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 /*	simplex_list.shrink_to_fit();*/
 	return simplex_list;
   }
-
+// DEPRECATED, USE COORDINATE SIMPLEX TREE
   euler_chars_type euler_char(std::vector<std::vector<options_multi::value_type>> &point_list){ // TODO multi-critical 
 		const int npts = point_list.size();
 		if (npts == 0){
@@ -317,7 +317,6 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 			Base::assign_filtration(SimplexHandle, new_filtration_value);
 		}
 	}
-
 	
 };
 

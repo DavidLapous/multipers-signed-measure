@@ -507,12 +507,11 @@ cdef class SimplexTreeMulti:
 		current_dim = self.dimension()
 		with nogil:
 			self.get_ptr().expansion(maxdim)
-
-		# This is a fix for multipersistence. FIXME expansion in c++
-		self.make_filtration_non_decreasing(start_dimension=current_dim+1)
+			# This is a fix for multipersistence. FIXME expansion in c++
+			self.get_ptr().make_filtration_non_decreasing()
 		return self
 
-	def make_filtration_non_decreasing(self, start_dimension:int=1)->SimplexTreeMulti: # FIXME TODO code in c++
+	def make_filtration_non_decreasing(self)->bool: # FIXME TODO code in c++
 		"""This function ensures that each simplex has a higher filtration
 		value than its faces by increasing the filtration values.
 
@@ -520,7 +519,13 @@ cdef class SimplexTreeMulti:
 			False if the filtration was already non-decreasing.
 		:rtype: bool
 		"""
-		# return self.get_ptr().make_filtration_non_decreasing()
+		cdef bool out
+		with nogil:
+			out = self.get_ptr().make_filtration_non_decreasing()
+		return out
+		
+	## DEPRECATED
+	def make_filtration_non_decreasing_old(self, start_dimension:int = 1):
 		if start_dimension <= 0:
 			start_dimension = 1
 #		cdef Simplex_tree_skeleton_iterator it

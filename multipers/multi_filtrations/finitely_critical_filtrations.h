@@ -122,6 +122,13 @@ public:
 	static std::vector<Finitely_critical_multi_filtration<T>> from_python(const std::vector<std::vector<T>>& to_convert){
 		return std::vector<Finitely_critical_multi_filtration<T>>(to_convert.begin(), to_convert.end());;
 	}
+	void push_to(const Finitely_critical_multi_filtration<T>& x){
+		if (this->size() != x.size())
+			{std::cout << this->size() << " " << x.size() << std::endl; return;}
+			
+		for (unsigned int i = 0; i < x.size(); i++)
+			this->at(i) = this->at(i) > x[i] ? this->at(i) : x[i];
+	}
 
 };
 
