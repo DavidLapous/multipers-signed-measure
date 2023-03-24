@@ -152,17 +152,24 @@ void squeeze_filtration(uintptr_t splxptr, const multi_filtration_grid &grid, bo
 	}
 	return;
 }
-multi_filtration_grid get_filtration_values(const uintptr_t splxptr){
+std::vector<multi_filtration_grid> get_filtration_values(const uintptr_t splxptr, const std::vector<int> &degrees){
 	Simplex_tree<options_multi> &st_multi = *(Gudhi::Simplex_tree<options_multi>*)(splxptr);
 	int num_parameters = st_multi.get_number_of_parameters();
-	multi_filtration_grid out(num_parameters, multi_filtration_type(st_multi.num_simplices()));
+	std::vector<multi_filtration_grid> out(degrees.size(), multi_filtration_grid(num_parameters));
+	std::vector<int> degree_index(degrees.size());
 	int count = 0;
+	for (auto degree : degrees){
+		degree_index[degree] = count; count++;
+		out[degree_index[degree]].reserve(st_multi.num_simplices());
+	}
+		
 	for (const auto &simplex_handle : st_multi.complex_simplex_range()){
 		const auto filtration = st_multi.filtration(simplex_handle);
+		const auto degree = st_multi.dimension(simplex_handle);
+		if (std::find(degrees.begin(), degrees.end(), degree) == degrees.end()) continue;
 		for (int parameter=0; parameter < num_parameters; parameter++){
-			out[parameter][count] = filtration[parameter];
+			out[degree_index[degree]][parameter].push_back(filtration[parameter]);
 		}
-		count++;
 	}
 	return out;
 

@@ -1,4 +1,6 @@
-#pragma once
+#ifndef FINITELY_CRITICAL_FILTRATIONS_H_
+#define FINITELY_CRITICAL_FILTRATIONS_H_
+
 #include <iostream>
 #include <algorithm>
 
@@ -129,8 +131,15 @@ public:
 		for (unsigned int i = 0; i < x.size(); i++)
 			this->at(i) = this->at(i) > x[i] ? this->at(i) : x[i];
 	}
+	// Warning, this function  assumes that the comparisons checks have already been made !
+	void insert_new(Finitely_critical_multi_filtration& to_concatenate){
+		this->insert(
+			this->end(), std::move_iterator(to_concatenate.begin()), std::move_iterator(to_concatenate.end())
+		);
+	}
 
 };
 
 
 } // namespace Gudhi
+#endif  // FINITELY_CRITICAL_FILTRATIONS_H_

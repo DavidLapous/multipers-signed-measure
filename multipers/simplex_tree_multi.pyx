@@ -40,6 +40,7 @@ from multipers.simplex_tree_multi cimport *
 from multipers.multiparameter_module_approximation import module_approximation, PyModule
 cimport cython
 from gudhi import SimplexTree ## Small hack for typing
+from typing import Iterable
 
 
 
@@ -52,7 +53,7 @@ cdef extern from "Simplex_tree_multi.h" namespace "Gudhi":
 	void flatten(const uintptr_t, const uintptr_t, const unsigned int) nogil
 	void flatten_diag(const uintptr_t, const uintptr_t, const vector[value_type], int) nogil
 	void squeeze_filtration(uintptr_t, const vector[vector[value_type]]&, bool) nogil except +
-	vector[vector[value_type]] get_filtration_values(uintptr_t) nogil
+	vector[vector[vector[value_type]]] get_filtration_values(uintptr_t, const vector[int]&) nogil
 
 
 cdef bool callback(vector[int] simplex, void *blocker_func):
@@ -104,7 +105,7 @@ cdef class SimplexTreeMulti:
 				self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
 				multify(other.thisptr, self.thisptr, num_parameters)
 			else:
-				raise TypeError("`other` argument requires to be of type `SimplexTree`, or `None`.")
+				raise TypeError("`other` argument requires to be of type `SimplexTree`, `SimplexTreeMulti` or `None`.")
 		else:
 			self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
 		self.get_ptr().set_number_of_parameters(num_parameters)
@@ -707,7 +708,10 @@ cdef class SimplexTreeMulti:
 		
 ## This function is only meant for the edge collapse interface.
 	def get_edge_list(self):
-		return self.get_ptr().get_edge_list()
+		cdef edge_list out;
+		with nogil:
+			out = self.get_ptr().get_edge_list()
+		return out
 	
 	def collapse_edges(self, max_dimension:int=None, num:int=1, progress:bool=False, strong:bool=True, full:bool=False, ignore_warning:bool=False):
 		"""Edge collapse for 1-critical 2-parameter clique complex (see https://arxiv.org/abs/2211.05574).
@@ -728,7 +732,7 @@ cdef class SimplexTreeMulti:
 
 		WARNING
 		-------
-			- This will destroy all of the k-simplices, with k>=2. Be sure to use this with a clique complex, if you want to preserve the homology strictly above dimension 1.
+			- This will destroy all of the k-simplices, with k>=2. Be sure to use this with a clique complex, if you want to preserve the homology >= dimension 1.
 			- This is for 1 critical simplices, with 2 parameter persistence.
 		Returns
 		-------
@@ -746,27 +750,28 @@ cdef class SimplexTreeMulti:
 		max_dimension = self.dimension() if max_dimension is None else max_dimension
 		# edge_list = std::vector<std::pair<std::pair<int,int>, std::pair<value_type, value_type>>>
 		# cdef vector[pair[pair[int,int],pair[value_type,value_type]]] 
-		edges = self.get_ptr().get_edge_list() 
+		edges = self.get_edge_list() 
 		# cdef int n = edges.size()
 		n = len(edges)
 		if full:
 			num = 100
-		for i in tqdm(range(num), total=num, desc="Removing edges", disable=not(progress)):
-			if strong:
-				edges = remove_strongly_filtration_dominated(edges) # nogil ?
-			else:
-				edges = remove_filtration_dominated(edges)
-			# Prevents doing useless collapses
-			if len(edges) >= n:
-				if full and strong:
-					strong = False
+		with tqdm(range(num), total=num, desc="Removing edges", disable=not(progress)) as I:
+			for i in I:
+				if strong:
+					edges = remove_strongly_filtration_dominated(edges) # nogil ?
+				else:
+					edges = remove_filtration_dominated(edges)
+				# Prevents doing useless collapses
+				if len(edges) >= n:
+					if full and strong:
+						strong = False
+						n = len(edges)
+						# n = edges.size() # len(edges)
+					else : 
+						break
+				else:
 					n = len(edges)
-					# n = edges.size() # len(edges)
-				else : 
-					break
-			else:
-				n = len(edges)
-				# n = edges.size()
+					# n = edges.size()
 				
 		reduced_tree = SimplexTreeMulti(num_parameters=self.num_parameters)
 		
@@ -776,14 +781,9 @@ cdef class SimplexTreeMulti:
 		reduced_tree.insert_batch(vertices, vertices_filtration)
 		
 		## Adds edges again
-		edges_filtration = np.array([f for e,f in edges])
-		edges = np.array([e for e, _ in edges], dtype=int).T
+		edges_filtration = np.asarray([f for e,f in edges], dtype=float)
+		edges = np.asarray([e for e, _ in edges], dtype=int).T
 		reduced_tree.insert_batch(edges, edges_filtration)
-		
-#		for splx, f in self.get_skeleton(0): # Adds vertices back
-#			reduced_tree.insert(splx, f)
-#		for e, (f1, f2) in edges:			# Adds reduced edges back # TODO : with insert_batch
-#			reduced_tree.insert(e, [f1,f2])
 		self.thisptr, reduced_tree.thisptr = reduced_tree.thisptr, self.thisptr # Swaps self and reduced tree (self is a local variable)
 		self.expansion(max_dimension) # Expands back the simplextree to the original dimension.
 		# self.make_filtration_non_decreasing(2)
@@ -935,7 +935,15 @@ cdef class SimplexTreeMulti:
 		file.close()
 		return
 
-	def get_filtration_grid(self, resolution:list|np.ndarray, box=None, grid_strategy:str="regular"):
+
+
+	def _get_filtration_values(self, degrees:Iterable[int]):
+		cdef c_degrees = degrees
+		cdef intptr_t ptr = self.thisptr
+		cdef vector[vector[vector[value_type]]] out = get_filtration_values(ptr, c_degrees)
+		return [np.asarray(filtration, dtype=float) for filtration in out]
+	
+	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, q:float=0.01, grid_strategy:str="regular"):
 		"""
 		Returns a grid over the n-filtration, from the simplextree. Usefull for grid_squeeze. TODO : multicritical
 
@@ -953,20 +961,27 @@ cdef class SimplexTreeMulti:
 			List of filtration values, for each parameter, defining the grid.
 		"""
 		if resolution is None:
-			warn("Provide a grid on which to squeeze !")
-			return
-		if box is None:
-			box = self.filtration_bounds()
+			resolution = [50]*len(self.num_parameters)
+		if degrees is None:
+			degrees = range(self.dimension()+1)
+
+		if grid_strategy == "quantile":
+			filtrations_values = np.concatenate(self._get_filtration_values(degrees), axis=1)
+			filtration_grid = [
+				np.quantile(filtration, np.linspace(0,1,num=res))
+				for filtration, res in zip(filtrations_values, resolution) 
+			]
+			return filtration_grid
+		
+		boxes = self.filtration_bounds(degrees = degrees, q=q)
+		box = np.asarray([np.min(boxes, axis=(0,1)), np.max(boxes, axis=(0,1))])
 		assert(len(box[0]) == len(box[1]) == len(resolution) == self.num_parameters, f"Number of parameter not concistent. box: {len(box[0])}, resolution:{len(resolution)}, simplex tree:{self.num_parameters}")
+		
 		if grid_strategy == "regular":
-			filtration_grid = np.array([np.linspace(*np.asarray(box)[:,i], num=resolution[i]) for i in range(self.num_parameters)])
-		elif grid_strategy == "quantile":
-			filtrations_values = np.asarray(get_filtration_values(self.thisptr))
-			filtration_grid = [np.quantile(filtration, np.linspace(0,1,num=res)) for filtration, res in zip(filtrations_values, resolution)] ## WARNING if multicritical cannot be turned into an array
-		else:
-			warn("Invalid grid strategy. Available ones are regular, and (todo) quantile")
-			return
-		return filtration_grid
+			return [np.linspace(*np.asarray(box)[:,i], num=resolution[i]) for i in range(self.num_parameters)]
+		
+		warn("Invalid grid strategy. Available ones are regular, and (todo) quantile")
+		return
 	
 
 	def grid_squeeze(self, filtration_grid:np.ndarray|list, coordinate_values:bool=False):
@@ -987,14 +1002,20 @@ cdef class SimplexTreeMulti:
 			squeeze_filtration(ptr, c_filtration_grid, c_coordinate_values)
 		return self
 
-	def filtration_bounds(self):
+	def filtration_bounds(self, degrees:Iterable[int]|None=None, q=0):
 		"""
 		Returns the filtrations bounds.
 		"""
 		#TODO : check
-		low = np.min([f for s,F in self.get_simplices() for f in np.array_split(F, len(F) // self.num_parameters)], axis=0)
-		high = np.max([f for s,F in self.get_simplices() for f in np.array_split(F, len(F) // self.num_parameters)], axis=0)
-		return np.asarray([low,high])
+		# low = np.min([f for s,F in self.get_simplices() for f in np.array_split(F, len(F) // self.num_parameters)], axis=0)
+		# high = np.max([f for s,F in self.get_simplices() for f in np.array_split(F, len(F) // self.num_parameters)], axis=0)
+		# return np.asarray([low,high])
+		# filtrations_values
+		# return np.quantile()
+		degrees = range(self.dimension()+1) if degrees is None else degrees
+		filtrations_values = self._get_filtration_values(degrees) ## degree, parameter, pt
+		return np.array([np.quantile(filtration, [q, 1-q], axis=1) for filtration in filtrations_values],dtype=float)
+
 
 	
 
