@@ -33,11 +33,12 @@ public:
 	typedef linear_indexing_tag Indexing_tag;
 	typedef int Vertex_handle;
 	typedef float value_type;
-	using Filtration_value = Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>; // Cannot put Finitely_critical_multi_filtration, cython doesn't know how to convert inheritence
+	using Filtration_value = Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
 	typedef std::uint32_t Simplex_key;
 	static const bool store_key = true;
 	static const bool store_filtration = true;
 	static const bool contiguous_vertices = false;
+	static const bool is_multi_parameter = true;
 };
 
 

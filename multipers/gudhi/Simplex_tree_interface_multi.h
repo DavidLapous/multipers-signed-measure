@@ -231,7 +231,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 	Base::assign_key(Base::find(simplex), key);
 	return;
   }
-  void fill_lowerstar(std::vector<options_multi::value_type> filtration, int axis){
+  void fill_lowerstar(const std::vector<options_multi::value_type>& filtration, int axis){
 	using value_type=options_multi::value_type;
 	for (auto &SimplexHandle : Base::complex_simplex_range()){
 		std::vector<value_type> current_birth = Base::filtration(SimplexHandle);

@@ -38,7 +38,6 @@
 #include <vector>
 #include <functional>  // for greater<>
 #include <stdexcept>
-#include <limits>  // Inf
 #include <initializer_list>
 #include <algorithm>  // for std::max
 #include <cstdint>  // for std::uint32_t
@@ -577,6 +576,11 @@ class Simplex_tree {
     return root_.members_.size();
   }
 
+  /** \brief Returns whether the complex is empty. */
+  bool is_empty() const {
+    return root_.members_.empty();
+  }
+
  public:
   /** \brief returns the number of simplices in the simplex_tree. */
   size_t num_simplices() {
@@ -811,7 +815,7 @@ class Simplex_tree {
    */
   template<class InputVertexRange = std::initializer_list<Vertex_handle>>
   std::pair<Simplex_handle, bool> insert_simplex_and_subfaces(const InputVertexRange& Nsimplex,
-				    Filtration_value filtration = 0) {
+				    Filtration_value filtration = {}) {
     auto first = std::begin(Nsimplex);
     auto last = std::end(Nsimplex);
 
@@ -851,8 +855,28 @@ class Simplex_tree {
     Simplex_handle simplex_one = insertion_result.first;
     bool one_is_new = insertion_result.second;
     if (!one_is_new) {
-      if (filtration(simplex_one) > filt) {
-        assign_filtration(simplex_one, filt);
+      if (!(filtration(simplex_one) <= filt)) { // TODO : For multipersistence, it's not clear what should be the default, especially for multicritical filtrations
+        if constexpr (SimplexTreeOptions::is_multi_parameter){
+          if (filt < filtration(simplex_one)){
+          //   assign_filtration(simplex_one, filt);
+          // I don't really like this behavior. 
+            // It prevents inserting simplices by default at the smallest possible position after its childrens.
+            // e.g., if (python) we type : st.insert([0], [1,0]), st.insert([1], [0,1]), st.insert([0,1])
+            // we may want st.filtration([0,1]) to be [1,1]. (maybe after a make_filtration_decreasing from user)
+            // Furthermore, this may more sense as default value -> 0 can erase filtration values of childrens... 
+          }
+          else{ // As multicritical filtrations are not well supported yet, its not safe to concatenate yet.
+            // two incomparables filtrations values -> we concatenate 
+            // std::cout << "incomparable -> concatenate" << std::endl;
+            // Filtration_value new_filtration = filtration(simplex_one);
+            // new_filtration.insert_new(filt); // we assume then that Filtration_value has a insert_new method.
+            // assign_filtration(simplex_one, new_filtration);
+          }
+        }
+        else{
+          assign_filtration(simplex_one, filt);
+        }
+        
       } else {
         // FIXME: this interface makes no sense, and it doesn't seem to be tested.
         insertion_result.first = null_simplex();
@@ -1427,22 +1451,20 @@ class Simplex_tree {
     for (auto& simplex : boost::adaptors::reverse(sib->members())) {
       // Find the maximum filtration value in the border
       Boundary_simplex_range boundary = boundary_simplex_range(&simplex);
-      Filtration_value max_filt_border_value;
-      if (this->number_of_parameters_ <= 1){
+      typename SimplexTreeOptions::Filtration_value max_filt_border_value {};
+      if constexpr (SimplexTreeOptions::is_multi_parameter){
+        // in that case, we assume that Filtration_value has a `push_to` member to handle this.
+        max_filt_border_value = typename SimplexTreeOptions::Filtration_value(this->number_of_parameters_);
+        for (auto &sh : boundary){
+          max_filt_border_value.push_to(filtration(sh)); // pushes the value of max_filt_border_value to reach simplex' filtration
+        }
+      }
+      else{
         Boundary_simplex_iterator max_border = std::max_element(std::begin(boundary), std::end(boundary),
                                                               [](Simplex_handle sh1, Simplex_handle sh2) {
                                                                 return filtration(sh1) < filtration(sh2);
                                                               });
-
         max_filt_border_value = filtration(*max_border);
-      }
-      else{
-        // not sure if this will compile with simplextree std
-        // in that case, we assume that Filtration_value has a max member to handle this.
-        max_filt_border_value = Filtration_value(this->number_of_parameters_, -std::numeric_limits<typename Filtration_value::value_type>::infinity());
-        for (auto &sh : boundary){
-          max_filt_border_value.push_to(filtration(sh)); // pushes the value of max_filt_border_value to reach simplex' filtration
-        }
       }
       
       // Replacing if(f<max) with if(!(f>=max)) would mean that if f is NaN, we replace it with the max of the children.
@@ -1972,6 +1994,7 @@ struct Simplex_tree_options_full_featured {
   static const bool store_key = true;
   static const bool store_filtration = true;
   static const bool contiguous_vertices = false;
+  static const bool is_multi_parameter = false;
 };
 
 /** Model of SimplexTreeOptions, faster than `Simplex_tree_options_full_featured` but note the unsafe

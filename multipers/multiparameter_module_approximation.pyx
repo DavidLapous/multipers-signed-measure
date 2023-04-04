@@ -346,11 +346,9 @@ cdef class PyModule:
 		elif basepoints is None:
 			h = box[1][1] - box[0][1]
 			basepoints = np.linspace([box[0][0] - h,box[0][1]], [box[1][0],box[0][1]], num=num) 
-		cdef cnp.ndarray[value_type, ndim=1] view_basepoint
 		cdef vector[cfiltration_type] cbasepoints
 		for i in range(num):
-			view_basepoint = basepoints[i]
-			cbasepoints.push_back(Finitely_critical_multi_filtration(view_basepoint))
+			cbasepoints.push_back(Finitely_critical_multi_filtration(basepoints[i]))
 		
 		out.set(self.cmod.get_barcodes(cbasepoints, degree, threshold))
 		return out

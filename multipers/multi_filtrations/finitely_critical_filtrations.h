@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <limits>
 
 namespace Gudhi::multi_filtrations{
 
@@ -13,7 +14,7 @@ public:
 	// explicit Finitely_critical_multi_filtration(std::vector<T>& v) : ptr_(&v) {
 	// }; // Conversion
 	Finitely_critical_multi_filtration() : std::vector<T>() {};
-	Finitely_critical_multi_filtration(int n) : std::vector<T>(n) {};
+	Finitely_critical_multi_filtration(int n) : std::vector<T>(n, -std::numeric_limits<T>::infinity()) {}; // minus infinity by default
 	Finitely_critical_multi_filtration(int n, T value) : std::vector<T>(n,value) {};
 	Finitely_critical_multi_filtration(std::initializer_list<T> init) : std::vector<T>(init) {};
 	Finitely_critical_multi_filtration(const std::vector<T>& v) : std::vector<T>(v) {};
@@ -126,17 +127,28 @@ public:
 	}
 	void push_to(const Finitely_critical_multi_filtration<T>& x){
 		if (this->size() != x.size())
-			{std::cout << this->size() << " " << x.size() << std::endl; return;}
-			
+			{std::cerr << "Does only work with 1-critical filtrations ! Sizes " << this->size() << " and " << x.size() << "are different !" << std::endl; return;}
 		for (unsigned int i = 0; i < x.size(); i++)
 			this->at(i) = this->at(i) > x[i] ? this->at(i) : x[i];
 	}
 	// Warning, this function  assumes that the comparisons checks have already been made !
-	void insert_new(Finitely_critical_multi_filtration& to_concatenate){
+	void insert_new(Finitely_critical_multi_filtration to_concatenate){
 		this->insert(
 			this->end(), std::move_iterator(to_concatenate.begin()), std::move_iterator(to_concatenate.end())
 		);
 	}
+
+	// easy debug 
+    friend std::ostream& operator<<(std::ostream& stream, const Finitely_critical_multi_filtration<T>& truc){
+        stream << "[";
+        for(unsigned int i = 0; i < truc.size()-1; i++){
+            stream << truc[i] << ", ";
+        }
+        if(!truc.empty()) stream << truc.back();
+        stream << "]";
+        return stream;
+    }
+
 
 };
 

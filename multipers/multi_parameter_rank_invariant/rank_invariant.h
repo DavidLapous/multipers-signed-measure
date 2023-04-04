@@ -10,11 +10,17 @@
 #include <algorithm>
 #include "Simplex_tree_multi.h"
 #include "multi_filtrations/box.h"
+#include "multi_filtrations/finitely_critical_filtrations.h"
 //#include "temp/debug.h"
 #include <gudhi/Persistent_cohomology.h>
 #include <tbb/blocked_range2d.h>
 #include <tbb/parallel_for.h>
 #include <tbb/enumerable_thread_specific.h>
+#include <tbb/global_control.h>
+
+// somewhere
+
+
 
 namespace Gudhi::rank_invariant{
 
@@ -121,6 +127,8 @@ using rank_tensor = std::vector<std::vector<std::vector<std::vector<int>>>>;
 // assumes that the simplextree has grid coordinate filtration
 rank_tensor get_2drank_invariant(const intptr_t simplextree_ptr, const std::vector<int> &grid_shape, const int degree){
 	constexpr bool verbose=false;
+	
+
 	Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
 	int I = grid_shape[0], J = grid_shape[1];
 	rank_tensor out(I, std::vector<std::vector<std::vector<int>>>(
@@ -186,9 +194,22 @@ rank_tensor get_2drank_invariant(const intptr_t simplextree_ptr, const std::vect
 
 
 
-inline value_type horizontal_line_filtration(const std::vector<value_type> &x, value_type height){
-	if (x[1] <= height)
-		return x[0];
+/// @brief Project a filtration value to an horizontal line.
+/// @param x the value to project
+/// @param height 
+/// @param i 
+/// @param j 
+/// @param fixed_values 
+/// @return 
+inline value_type horizontal_line_filtration(const std::vector<value_type> &x, value_type height, int i, int j, const std::vector<value_type>& fixed_values){
+	for (int k = 0, count = -1; k < static_cast<int>(x.size()); k++){
+		if (k == i || k == j) continue; // coordinate in the plane
+		count++;
+		if (x[k] > fixed_values[count]) // simplex appears after the plane
+			return std::numeric_limits<Simplex_tree_std::Filtration_value>::infinity();
+	}
+	if (x[j] <= height) // simplex apppears in the plane, but is it in the line with height "height"
+		return x[i];
 	else
 		return std::numeric_limits<Simplex_tree_std::Filtration_value>::infinity();
 }
@@ -201,19 +222,30 @@ inline value_type horizontal_line_filtration(const std::vector<value_type> &x, v
 
 
 using grid2d = std::vector<std::vector<int>>;
-grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &grid_shape, const int degree){
-	// Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
-	auto &st_multi = get_simplextree_from_pointer<options_multi>(simplextree_ptr);
-	if (grid_shape.size() != 2){
-		std::cerr << "Use a 2d grid shape."<<std::endl;
-		return grid2d();
-	}
-	int I = grid_shape[0], J = grid_shape[1];
+
+/// @brief Computes the hilbert function on a 2D grid. It assumes that the filtration values of the simplextree are coordinates in a grid, of size grid_shape
+/// @param st_multi the multiparameter simplextree. It has to have at least 2 parameters. i,j are the filtration axes on which to compute the filtration
+/// @param grid_shape the size of the grid
+/// @param degree the homological degree to compute
+/// @param i free coordinate 
+/// @param j free coordinate;
+/// @param fixed_values when the simplextree is more than 2 parameter, the non-free coordinate have to be specified, i.e. on which "plane" to compute the hilbert function.
+/// @return the hilbert function
+grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, int i = 0, int j = 1, const std::vector<value_type> fixed_values = {}){
+	if (grid_shape.size() < 2 || st_multi.get_number_of_parameters() < 2)
+		throw std::invalid_argument("Grid shape has to have at least 2 element.");
+	if (st_multi.get_number_of_parameters() - fixed_values.size() != 2)
+		throw std::invalid_argument("Fix more values for the simplextree, which has a too big number of parameters");
+	constexpr bool verbose = false;
+	if constexpr(verbose)
+		tbb::global_control c(tbb::global_control::max_allowed_parallelism, 1);
+	int I = grid_shape[i], J = grid_shape[j];
+	if constexpr(verbose) std::cout << "Grid shape : " << I << " " << J << std::endl;
 	grid2d out(I, std::vector<int>(J,0)); // zero of good size
 	Simplex_tree_std _st;
-	flatten(_st, st_multi,0U); // copies the st_multi to a standard 1-pers simplextree
+	flatten<Simplex_tree_float, Simplex_tree_options_multidimensional_filtration>(_st, st_multi,0U); // copies the st_multi to a standard 1-pers simplextree
 	tbb::enumerable_thread_specific<Simplex_tree_std> thread_simplex_tree;
-	tbb::parallel_for(0, I,[&](int height){
+	tbb::parallel_for(0, J,[&](int height){
 		Simplex_tree_std &st_std = thread_simplex_tree.local();
 		if (st_std.num_simplices() == 0){ st_std = _st;}
 		Simplex_tree_multi::Filtration_value multi_filtration;
@@ -221,17 +253,23 @@ grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &gri
 		auto _end = st_std.complex_simplex_range().end();
 		auto sh_multi = st_multi.complex_simplex_range().begin();
 		for (;sh_standard != _end; ++sh_multi, ++sh_standard){
-			multi_filtration = st_multi.filtration(*sh_multi);
-			value_type horizontal_filtration = horizontal_line_filtration(multi_filtration, height);
+			multi_filtration = st_multi.filtration(*sh_multi); 
+			value_type horizontal_filtration = horizontal_line_filtration(multi_filtration, height, i,j, fixed_values);
 			st_std.assign_filtration(*sh_standard, horizontal_filtration);
+		}
+		if constexpr(verbose) {
+			std::cout << "Coords : "  << height << " [";
+			for (auto stuff : fixed_values)
+				std::cout << stuff << " ";
+			std::cout  << "]" << std::endl;
 		}
 		const Barcode barcode = compute_dgm(st_std, degree);
 		for(const auto &bar : barcode){
 			auto birth = bar.first;
-			if (birth > I) // some birth can be infinite
+			if (birth >= I) // some birth can be infinite
 				continue; 
-			int death = bar.second > I ? I-1: bar.second; // TODO FIXME 
-			for (int index = birth; index <= death; index ++){
+			int death = bar.second > I ? I: bar.second; // TODO FIXME 
+			for (int index = birth; index < death; index ++){
 				out[index][height]++;
 			}
 		}
@@ -239,7 +277,79 @@ grid2d get_2Dhilbert(const intptr_t simplextree_ptr, const std::vector<int> &gri
 	return out;
 	
 }
+using grid2d = std::vector<std::vector<int>>;
+/// @brief /!\ DANGEROUS /!\ For python only. 
+/// @tparam ...Args 
+/// @param simplextree_ptr the simplextree pointer
+/// @param ...args 
+/// @return 
+template<typename ... Args>
+grid2d get_2Dhilbert(const intptr_t simplextree_ptr, Args...args){
+	auto &st_multi = get_simplextree_from_pointer<Simplex_tree_options_multidimensional_filtration>(simplextree_ptr);
+	return get_2Dhilbert(st_multi, args...);
+}
 
+using grid3d = std::vector<grid2d>;
+/// @brief 
+/// @param st_multi simplextree 
+/// @param grid_shape shape of the 3D grid
+/// @param degree homological degree to compute
+/// @param i free coordinate
+/// @param j free coordinate
+/// @param k free coordinate
+/// @param fixed_values values of the non-free coordinates
+/// @return 
+grid3d get_3Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, int i=0, int j=1, int k=2,const std::vector<value_type> fixed_values = {}){
+	if (grid_shape.size() < 3 || st_multi.get_number_of_parameters() < 3 )
+		throw std::invalid_argument("Grid shape has to have at least 3 element.");
+	if (st_multi.get_number_of_parameters() - fixed_values.size() != 3)
+		throw std::invalid_argument("Fix more values for the simplextree, which has a too big number of parameters");
+	grid3d out(grid_shape[k]);
+	// const std::vector<int> _grid = {grid_shape[1],grid_shape[2]};
+	tbb::parallel_for(0, static_cast<int>(out.size()), [&](int z){
+		std::vector<value_type> _fixed_values(fixed_values.size() +1);
+		_fixed_values[0] = static_cast<value_type>(z);
+		std::copy(fixed_values.begin(), fixed_values.end(), _fixed_values.begin()+1);
+		out[z] = get_2Dhilbert(st_multi, grid_shape, degree,i,j, _fixed_values);
+	});
+	return out;
+}
+template<typename ... Args>
+/// @brief /!\ DANGEROUS /!\ For python only. 
+/// @tparam ...Args 
+/// @param simplextree_ptr the simplextree pointer
+/// @param ...args 
+/// @return 
+grid3d get_3Dhilbert(const intptr_t simplextree_ptr, Args...args){
+	auto &st_multi = get_simplextree_from_pointer<Simplex_tree_options_multidimensional_filtration>(simplextree_ptr);
+	return get_3Dhilbert(st_multi, args...);
+}
+
+using grid4d = std::vector<grid3d>;
+grid4d get_4Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, const std::vector<value_type> fixed_values = {}){
+	if (grid_shape.size() < 4 || st_multi.get_number_of_parameters() < 4)
+		throw std::invalid_argument("Grid shape has to have at least 4 element.");
+	if (st_multi.get_number_of_parameters() - fixed_values.size() != 4)
+		throw std::invalid_argument("Fix more values for the simplextree, which has a too big number of parameters");
+	
+	grid4d out(grid_shape[0]);
+	// const std::vector<int> _grid = {grid_shape[1],grid_shape[2], grid_shape[3]};
+	tbb::parallel_for(0, static_cast<int>(out.size()), [&](int z){
+		out[z] = get_3Dhilbert(st_multi, grid_shape, degree, 1,2,3, {static_cast<value_type>(z)});
+	});
+	return out;
+}
+
+template<typename ... Args>
+/// @brief /!\ DANGEROUS /!\ For python only. 
+/// @tparam ...Args 
+/// @param simplextree_ptr the simplextree pointer
+/// @param ...args 
+/// @return 
+grid4d get_4Dhilbert(const intptr_t simplextree_ptr, Args...args){
+	auto &st_multi = get_simplextree_from_pointer<Simplex_tree_options_multidimensional_filtration>(simplextree_ptr);
+	return get_4Dhilbert(st_multi, args...);
+}
 
 
 using grid2d = std::vector<std::vector<int>>;
@@ -261,7 +371,6 @@ grid2d get_euler2d(const intptr_t simplextree_ptr, const std::vector<int> &grid_
 	}
 	return out;
 }
-
 
 
 
