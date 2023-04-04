@@ -14,7 +14,7 @@ This library has 3 modules
    - `SimplexTreeMulti.collapse_edges(<num_collapses>)`
    - `SimplexTreeMulti.grid_squeeze(<filtration_grid>, coordinate_values=False)` to project the filtration values on a grid, if coordinate simplex tree is set to true, will turn the filtration values into coordinates in this grid.
  - **rank_invariant** :
-   - `mp.hilbert2d(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the 2-parameter hilbert function (output is a matrix of betti)
+   - `mp.hilbert(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the n-parameter hilbert function (output is a matrix of betti). Works up to #parameter=4
    - `mp.rank_invariant2d(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the 2-parameter rank invariant 
    output is : $$\mathrm{out}[i][j][k][l] = \mathrm{rk} M_{i,j} \to M_{k,l}$$
    - `mp.euler2d(<coordinate simplex tree>, <grid_shape>)` computes the euler surface.
