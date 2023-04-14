@@ -977,7 +977,7 @@ cdef class SimplexTreeMulti:
 			List of filtration values, for each parameter, defining the grid.
 		"""
 		if resolution is None:
-			resolution = [25]*len(self.num_parameters)
+			resolution = [25]*self.num_parameters
 		if degrees is None:
 			degrees = range(self.dimension()+1)
 
