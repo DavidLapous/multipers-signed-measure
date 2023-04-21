@@ -971,7 +971,7 @@ cdef class SimplexTreeMulti:
 				Grid bounds. format : [low bound, high bound]
 				If None is given, will use the filtration bounds of the simplextree.
 			grid_strategy="regular" : string
-				Either "regular" or "quantile".
+				Either "regular", "quantile", or "exact".
 		Returns
 		-------
 			List of filtration values, for each parameter, defining the grid.
@@ -989,13 +989,19 @@ cdef class SimplexTreeMulti:
 			]
 			return filtration_grid
 		
+		if grid_strategy == "exact":
+			filtrations_values = np.concatenate(self._get_filtration_values(degrees, inf_to_nan=True), axis=1)
+			filtrations_values = [np.unique(filtration) for filtration in filtrations_values]
+			filtrations_values = [filtration[filtration != np.nan] for filtration in filtrations_values]
+			return filtrations_values
+		
 		box = self.filtration_bounds(degrees = degrees, q=q, split_dimension=False, remove_inf=True)
 		assert(len(box[0]) == len(box[1]) == len(resolution) == self.num_parameters, f"Number of parameter not concistent. box: {len(box[0])}, resolution:{len(resolution)}, simplex tree:{self.num_parameters}")
 		
 		if grid_strategy == "regular":
 			return [np.linspace(*np.asarray(box)[:,i], num=resolution[i]) for i in range(self.num_parameters)]
 		
-		warn("Invalid grid strategy. Available ones are regular, and (todo) quantile")
+		raise Exception("Invalid grid strategy. Available ones are regular, quantile, and exact")
 		return
 	
 

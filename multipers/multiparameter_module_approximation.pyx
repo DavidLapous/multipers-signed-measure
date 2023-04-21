@@ -71,8 +71,8 @@ cdef class PySummand:
 
 	def get_death_list(self)->list:
 		return Finitely_critical_multi_filtration.to_python(self.sum.get_death_list())
-
-	def get_dimension(self)->int:
+	@property
+	def num_parameters(self)->int:
 		return self.sum.get_dimension()
 	
 	cdef set(self, Summand& summand):
@@ -83,7 +83,8 @@ cdef class PyBox:
 	cdef Box[value_type] box
 	def __cinit__(self, corner_type bottomCorner, corner_type topCorner):
 		self.box = Box[value_type](bottomCorner, topCorner)
-	def get_dimension(self):
+	@property
+	def num_parameters(self):
 		cdef size_t dim = self.box.get_bottom_corner().size()
 		if dim == self.box.get_upper_corner().size():	return dim
 		else:	print("Bad box definition.")
@@ -214,7 +215,8 @@ cdef class PyModule:
 		return self.cmod.get_box().get_upper_corner().get_vector()
 	def get_box(self):
 		return [self.get_bottom(), self.get_top()]
-	def get_dimension(self)->int:
+	@property
+	def num_parameters(self)->int:
 		return self.cmod.get_dimension()
 	def dump(self, path:str|None=None):
 		"""

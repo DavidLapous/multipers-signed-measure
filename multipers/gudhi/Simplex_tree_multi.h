@@ -113,18 +113,37 @@ void flatten_diag(const uintptr_t splxptr, const uintptr_t newsplxptr, const std
 
 
 
+/// @brief projects the point x on the grid
+/// @tparam out_type 
+/// @param x 
+/// @param grid 
+/// @return 
 template<typename out_type=int>
 std::vector<out_type> find_coordinates(const std::vector<options_multi::value_type> &x, const multi_filtration_grid &grid){
 	// TODO: optimize with, e.g., dichotomy
 	std::vector<out_type> coordinates(grid.size());
-	for (int parameter = 0; parameter< (int)grid.size(); parameter++){
-		const auto& filtration = grid[parameter];
-		const auto& to_project = x[parameter];
-		std::vector<options_multi::value_type> distance_vector(filtration.size());
-		for (int i = 0; i < (int)filtration.size(); i++){
-			distance_vector[i] = std::abs(to_project - filtration[i]);
+	for (int parameter = 0; parameter < (int)grid.size(); parameter++){
+		const auto& filtration = grid[parameter]; // assumes its sorted
+		const auto to_project = x[parameter];
+		unsigned int i = 0;
+		// std::cout << to_project<< " " <<filtration[i]<<" " <<i << "\n";
+		while (to_project > filtration[i] && i<filtration.size()) {
+			i++;
+			// std::cout << to_project<< " " <<filtration[i]<<" " <<i << "\n";
 		}
-		coordinates[parameter] = std::distance(distance_vector.begin(), std::min_element(distance_vector.begin(), distance_vector.end()));
+		if (i==0)
+			coordinates[parameter] = 0;
+		else if (i < filtration.size()){
+			options_multi::value_type d1,d2;
+			d1 = std::abs(filtration[i-1] - to_project);
+			d2 = std::abs(filtration[i] - to_project);
+			coordinates[parameter] = d1<d2 ? i-1 : i;
+		}
+		// std::vector<options_multi::value_type> distance_vector(filtration.size());
+		// for (int i = 0; i < (int)filtration.size(); i++){
+		// 	distance_vector[i] = std::abs(to_project - filtration[i]);
+		// }
+		// coordinates[parameter] = std::distance(distance_vector.begin(), std::min_element(distance_vector.begin(), distance_vector.end()));
 	}
 	return coordinates;
 }

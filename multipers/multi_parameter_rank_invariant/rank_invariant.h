@@ -11,6 +11,7 @@
 #include "Simplex_tree_multi.h"
 #include "multi_filtrations/box.h"
 #include "multi_filtrations/finitely_critical_filtrations.h"
+#include "multi_filtrations/line.h"
 //#include "temp/debug.h"
 #include <gudhi/Persistent_cohomology.h>
 #include <tbb/blocked_range2d.h>
@@ -304,13 +305,13 @@ grid3d get_3Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 		throw std::invalid_argument("Grid shape has to have at least 3 element.");
 	if (st_multi.get_number_of_parameters() - fixed_values.size() != 3)
 		throw std::invalid_argument("Fix more values for the simplextree, which has a too big number of parameters");
-	grid3d out(grid_shape[k]);
+	grid3d out(grid_shape[i]);
 	// const std::vector<int> _grid = {grid_shape[1],grid_shape[2]};
 	tbb::parallel_for(0, static_cast<int>(out.size()), [&](int z){
 		std::vector<value_type> _fixed_values(fixed_values.size() +1);
 		_fixed_values[0] = static_cast<value_type>(z);
 		std::copy(fixed_values.begin(), fixed_values.end(), _fixed_values.begin()+1);
-		out[z] = get_2Dhilbert(st_multi, grid_shape, degree,i,j, _fixed_values);
+		out[z] = get_2Dhilbert(st_multi, grid_shape, degree,j,k, _fixed_values);
 	});
 	return out;
 }
@@ -364,7 +365,7 @@ grid2d get_euler2d(const intptr_t simplextree_ptr, const std::vector<int> &grid_
 	grid2d out(I, std::vector<int>(J,0)); // zero of good size
 	for (auto &sh : st_multi.complex_simplex_range()){
 		auto filtration = st_multi.filtration((sh));
-		int sign = 1- 2*(st_multi.dimension(sh) % 2);
+		int sign = 1-2*(st_multi.dimension(sh) % 2);
 		for (int i=filtration[0]; i<I; i++)
 			for (int j = filtration[1]; j<J; j++)
 				out[i][j] += sign;
@@ -374,6 +375,85 @@ grid2d get_euler2d(const intptr_t simplextree_ptr, const std::vector<int> &grid_
 
 
 
+
+// /// @brief Assigns filtration values of the 1 parameter simplextree to the diagonal line filtration values from the multi-parameter st. WARNING: It assumes st_std and st_multi have the SAME SIMPLICES.
+// /// @tparam _options_std 
+// /// @tparam _options_multi 
+// /// @param st 
+// /// @param st_multi 
+// /// @param basepoint 
+// /// @param axis 
+// template<typename value_type>
+// void assign_diagonal_line_filtration(Simplex_tree_std &st_std, Simplex_tree_multi &st_multi, const std::vector<value_type> basepoint, int axis=0,
+// 		value_type max_filtration_value=std::numeric_limits< value_type>::infinity()
+// ){
+// 	Gudhi::multi_filtrations::Line<Simplex_tree_multi::Options::value_type> l(basepoint);
+// 	Simplex_tree_multi::Options::Filtration_value multi_filtration;
+// 	auto sh_standard = st_std.complex_simplex_range().begin();
+// 	auto _end = st_std.complex_simplex_range().end();
+// 	auto sh_multi = st_multi.complex_simplex_range().begin();
+// 	for (;sh_standard != _end; ++sh_multi, ++sh_standard){
+// 		multi_filtration = st_multi.filtration(*sh_multi); 
+// 		if (axis <0)	 axis = 0;
+// 		Simplex_tree_std::Options::value_type projected_filtration = l.push_forward(multi_filtration)[axis];
+// 		if (projected_filtration > max_filtration_value)
+// 			projected_filtration = std::numeric_limits<Simplex_tree_std::value_type>::infinity();
+// 		st_std.assign_filtration(*sh_standard, projected_filtration);
+// 	}
+// }
+
+
+
+// template<typename value_type>
+// Barcode get_barcode_on_line(Simplex_tree_std &st_std, Simplex_tree_multi &st_multi, 
+// 		const std::vector<value_type> basepoint, int degree,
+// 		value_type max_filtration_value=std::numeric_limits<value_type>::infinity()
+// 	){
+// 	if (st_std.num_simplices() != st_multi.num_simplices()){
+// 		// std::cerr << "Reconstructing simplextree...\n";
+// 		flatten<Simplex_tree_float, Simplex_tree_options_multidimensional_filtration>(st_std, st_multi,0U);
+// 	}
+// 	assign_diagonal_line_filtration(st_std,st_multi,basepoint,0);
+// 	const Barcode barcode = compute_dgm(st_std, degree);
+// 	return barcode;
+// }
+
+
+
+
+
+
+
+// grid2d get_2Dlandscapes(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, std::vector<int> ks){
+// 	if (grid_shape.size() < 2 || st_multi.get_number_of_parameters() < 2)
+// 		throw std::invalid_argument("Grid shape has to have at least 2 element.");
+// 	constexpr bool verbose = false;
+// 	if constexpr(verbose)
+// 		tbb::global_control c(tbb::global_control::max_allowed_parallelism, 1);
+// 	int I = grid_shape[0], J = grid_shape[1];
+// 	if constexpr(verbose) std::cout << "Grid shape : " << I << " " << J << std::endl;
+// 	grid2d out(I, std::vector<int>(J,0)); // zero of good size
+// 	Simplex_tree_std _st;
+// 	flatten<Simplex_tree_float, Simplex_tree_options_multidimensional_filtration>(_st, st_multi,0U); // copies the st_multi to a standard 1-pers simplextree
+// 	tbb::enumerable_thread_specific<Simplex_tree_std> thread_simplex_tree;
+// 	tbb::parallel_for(-J+1, I,[&](int i){
+// 		Simplex_tree_std &st_std = thread_simplex_tree.local();
+// 		if (st_std.num_simplices() == 0){ st_std = _st;}
+// 		auto max_filtration_value = std::max(I-1,J-1-i);
+// 		const Barcode barcode = get_barcode_on_line(st_std,st_multi,{i,0},degree, max_filtration_value);
+// 		for(const auto &bar : barcode){
+// 			// Thresholds to box
+// 			auto birth = std::max(bar.first,std::abs(i));
+// 			auto death = std::min(bar.second,max_filtration_value);
+// 			if (birth >= death) continue; 
+			
+// 			// adds the 
+// 			// TODO
+// 		}
+// 	});
+// 	return out;
+	
+// }
 
 // std::vector<Rectangle<int>> signed_barcode(const rank_tensor &rank_invariant){
 // 	Barcode barcode;
