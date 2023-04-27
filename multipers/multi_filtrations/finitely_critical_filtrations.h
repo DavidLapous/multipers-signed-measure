@@ -20,6 +20,8 @@ public:
 	Finitely_critical_multi_filtration(std::initializer_list<T> init) : std::vector<T>(init) {};
 	Finitely_critical_multi_filtration(const std::vector<T>& v) : std::vector<T>(v) {};
 	Finitely_critical_multi_filtration(typename std::vector<T>::iterator it_begin,typename std::vector<T>::iterator it_end) : std::vector<T>(it_begin, it_end) {};
+	Finitely_critical_multi_filtration(typename std::vector<T>::const_iterator it_begin,typename std::vector<T>::const_iterator it_end) : std::vector<T>(it_begin, it_end) {};
+
 
 	operator std::vector<T>&() const {
 		return *this;
