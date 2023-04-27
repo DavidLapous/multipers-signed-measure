@@ -13,12 +13,13 @@ class Finitely_critical_multi_filtration : public std::vector<T> {
 public:
 	// explicit Finitely_critical_multi_filtration(std::vector<T>& v) : ptr_(&v) {
 	// }; // Conversion
-	using std::vector<T>::vector;
+	// using std::vector<T>::vector;
 	Finitely_critical_multi_filtration() : std::vector<T>() {};
 	Finitely_critical_multi_filtration(int n) : std::vector<T>(n, -std::numeric_limits<T>::infinity()) {}; // minus infinity by default
 	Finitely_critical_multi_filtration(int n, T value) : std::vector<T>(n,value) {};
 	Finitely_critical_multi_filtration(std::initializer_list<T> init) : std::vector<T>(init) {};
 	Finitely_critical_multi_filtration(const std::vector<T>& v) : std::vector<T>(v) {};
+	Finitely_critical_multi_filtration(typename std::vector<T>::iterator it_begin,typename std::vector<T>::iterator it_end) : std::vector<T>(it_begin, it_end) {};
 
 	operator std::vector<T>&() const {
 		return *this;
