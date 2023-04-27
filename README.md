@@ -17,7 +17,7 @@ This library has 3 modules
    - `mp.hilbert(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the n-parameter hilbert function (output is a matrix of betti). Works up to #parameter=4
    - `mp.rank_invariant2d(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the 2-parameter rank invariant 
    output is : $$\mathrm{out}[i][j][k][l] = \mathrm{rk} M_{i,j} \to M_{k,l}$$
-   - `mp.euler2d(<coordinate simplex tree>, <grid_shape>)` computes the euler surface.
+   - `mp.euler(<coordinate simplex tree>, <grid_shape>)` computes the euler surface. Works up to #parameter=4
  - **multiparameter_module_approximation** : in order to visualize the $n$-modules, to debug.
    - Given a simplextree `st`, an approximation into interval decomposable modules can be computed using
    ```mod = st.persistence_approximation()```

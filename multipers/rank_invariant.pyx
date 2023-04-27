@@ -3,10 +3,13 @@ from libcpp.vector cimport vector
 from libc.stdint cimport intptr_t
 from libcpp cimport bool
 from libcpp cimport int
+from libcpp.utility cimport pair
+
 ctypedef vector[vector[vector[vector[int]]]] rank2
 ctypedef vector[vector[int]] grid2D
 ctypedef vector[vector[vector[int]]] grid3D
 ctypedef vector[vector[vector[vector[int]]]] grid4D
+ctypedef pair[vector[vector[int]],vector[int]] signed_measure
 from itertools import product
 
 
@@ -15,10 +18,14 @@ from itertools import product
 
 cdef extern from "multi_parameter_rank_invariant/rank_invariant.h" namespace "Gudhi::rank_invariant":
 	rank2 get_2drank_invariant(const intptr_t, const vector[int]&, const int) nogil
-	grid2D get_2Dhilbert(const intptr_t, const vector[int]&, const int) nogil except +
+	grid2D get_2Dhilbert(const intptr_t, const vector[int]&, const int, bool) nogil except +
+	signed_measure get_2D_SM(const intptr_t, const vector[int]&, const int) nogil except +
 	grid3D get_3Dhilbert(const intptr_t, const vector[int]&, const int) nogil except +
 	grid4D get_4Dhilbert(const intptr_t, const vector[int]&, const int) nogil except +
-	grid2D get_euler2d(const intptr_t, const vector[int]&) nogil
+	grid2D get_euler2d(const intptr_t, const vector[int]&) nogil except +
+	grid3D get_euler3d(const intptr_t, const vector[int]&) nogil except +
+	grid4D get_euler4d(const intptr_t, const vector[int]&) nogil except +
+
 
 from multipers.simplex_tree_multi import SimplexTreeMulti # Typing hack
 
@@ -36,15 +43,24 @@ def rank_invariant2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, i
 		out = get_2drank_invariant(ptr, c_grid_shape, c_degree)
 	return np.array(out, dtype=float)
 
-cdef _hilbert2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int degree):
+cdef _hilbert2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int degree, bool mobius_inversion):
 	# assert simplextree.num_parameters == 2
 	cdef intptr_t ptr = simplextree.thisptr
 	cdef int c_degree = degree
 	cdef vector[int] c_grid_shape = grid_shape
 	cdef grid2D out
 	with nogil:
-		out = get_2Dhilbert(ptr, c_grid_shape, c_degree)
+		out = get_2Dhilbert(ptr, c_grid_shape, c_degree, mobius_inversion)
 	return np.array(out, dtype=int)
+cdef _sm_2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int degree):
+	# assert simplextree.num_parameters == 2
+	cdef intptr_t ptr = simplextree.thisptr
+	cdef int c_degree = degree
+	cdef vector[int] c_grid_shape = grid_shape
+	cdef signed_measure out
+	with nogil:
+		out = get_2D_SM(ptr, c_grid_shape, c_degree)
+	return np.array(out.first, dtype=int), np.array(out.second, dtype=int)
 
 cdef _hilbert3d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int degree):
 	# assert simplextree.num_parameters == 3
@@ -66,10 +82,12 @@ cdef _hilbert4d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int de
 		out = get_4Dhilbert(ptr, c_grid_shape, c_degree)
 	return np.array(out, dtype=int)
 
-def hilbert(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, degree:int):
+
+def hilbert(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, degree:int,sparse:bool=False):
 	assert len(grid_shape) >= simplextree.num_parameters, "Grid shape not valid"
 	if simplextree.num_parameters == 2:
-		return _hilbert2d(simplextree, grid_shape, degree)
+		out = _sm_2d(simplextree, grid_shape, degree) if sparse else _hilbert2d(simplextree, grid_shape, degree, False)
+		return out
 	if simplextree.num_parameters == 3:
 		return _hilbert3d(simplextree, grid_shape, degree)
 	if simplextree.num_parameters == 4:
@@ -82,8 +100,30 @@ def euler2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list):
 	cdef vector[vector[int]] out
 	with nogil:
 		out = get_euler2d(ptr, c_grid_shape)
-	return np.array(out)
+	return np.array(out, dtype=int)
+def euler3d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list):
+	cdef intptr_t ptr = simplextree.thisptr
+	cdef vector[int] c_grid_shape = grid_shape
+	cdef grid3D out
+	with nogil:
+		out = get_euler3d(ptr, c_grid_shape)
+	return np.array(out, dtype=int)
+def euler4d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list):
+	cdef intptr_t ptr = simplextree.thisptr
+	cdef vector[int] c_grid_shape = grid_shape
+	cdef grid4D out
+	with nogil:
+		out = get_euler4d(ptr, c_grid_shape)
+	return np.array(out, dtype=int)
 
+def euler(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, degree:int=None):
+	if simplextree.num_parameters == 2:
+		return euler2d(simplextree, grid_shape)
+	if simplextree.num_parameters == 3:
+		return euler3d(simplextree, grid_shape)
+	if simplextree.num_parameters == 4:
+		return euler4d(simplextree, grid_shape)
+	raise Exception(f"Number of parameter has to be 2,3, or 4.")
 
 
 # def trivial_rectangle(rectangle:np.ndarray, betti:np.ndarray):

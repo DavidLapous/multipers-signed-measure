@@ -959,7 +959,7 @@ cdef class SimplexTreeMulti:
 				filtrations_values[i][f == - np.inf] = np.nan
 		return filtrations_values
 	
-	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, q:float=0.01, grid_strategy:str="regular"):
+	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, q:float=0., grid_strategy:str="regular"):
 		"""
 		Returns a grid over the n-filtration, from the simplextree. Usefull for grid_squeeze. TODO : multicritical
 
@@ -995,14 +995,13 @@ cdef class SimplexTreeMulti:
 			filtrations_values = [filtration[filtration != np.nan] for filtration in filtrations_values]
 			return filtrations_values
 		
-		box = self.filtration_bounds(degrees = degrees, q=q, split_dimension=False, remove_inf=True)
+		box = self.filtration_bounds(degrees = degrees, q=q, split_dimension=False)
 		assert(len(box[0]) == len(box[1]) == len(resolution) == self.num_parameters, f"Number of parameter not concistent. box: {len(box[0])}, resolution:{len(resolution)}, simplex tree:{self.num_parameters}")
 		
 		if grid_strategy == "regular":
 			return [np.linspace(*np.asarray(box)[:,i], num=resolution[i]) for i in range(self.num_parameters)]
 		
 		raise Exception("Invalid grid strategy. Available ones are regular, quantile, and exact")
-		return
 	
 
 	def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, coordinate_values:bool=False):
@@ -1023,13 +1022,13 @@ cdef class SimplexTreeMulti:
 			squeeze_filtration(ptr, c_filtration_grid, c_coordinate_values)
 		return self
 
-	def filtration_bounds(self, degrees:Iterable[int]|None=None, q:float=0, split_dimension:bool=False, remove_inf=True):
+	def filtration_bounds(self, degrees:Iterable[int]|None=None, q:float=0, split_dimension:bool=False):
 		"""
-		Returns the filtrations bounds.
+		Returns the filtrations bounds of the finite filtration values.
 		"""
 		assert 0<= q <= 0.5
 		degrees = range(self.dimension()+1) if degrees is None else degrees
-		filtrations_values = self._get_filtration_values(degrees, inf_to_nan=remove_inf) ## degree, parameter, pt
+		filtrations_values = self._get_filtration_values(degrees, inf_to_nan=True) ## degree, parameter, pt
 		boxes = np.array([np.nanquantile(filtration, [q, 1-q], axis=1) for filtration in filtrations_values],dtype=float)
 		if split_dimension: return boxes
 		return np.asarray([np.nanmin(boxes, axis=(0,1)), np.nanmax(boxes, axis=(0,1))]) # box, birth/death, filtration
