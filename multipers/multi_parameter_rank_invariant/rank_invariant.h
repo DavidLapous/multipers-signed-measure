@@ -41,7 +41,8 @@ using Simplex_tree_multi = Simplex_tree<Simplex_tree_options_multidimensional_fi
 using value_type = Simplex_tree_options_multidimensional_filtration::Filtration_value::value_type;
 
 using signed_measure = std::pair< std::vector<std::vector<int>>, std::vector<int> >  ;
-using grid2d = std::vector<std::vector<int>>;
+using grid1d = std::vector<int>;
+using grid2d = std::vector<grid1d>;
 using grid3d = std::vector<grid2d>;
 using grid4d = std::vector<grid3d>;
 
@@ -51,14 +52,24 @@ using grid4d = std::vector<grid3d>;
 
 template<typename T=int>
 using Rectangle = std::tuple<std::vector<T>, std::vector<T>, int>;
+inline grid2d allocate_zero_grid(int a, int b){
+	grid2d out(a, std::vector<int>(b,0));
+	return out;
+}
+inline grid3d allocate_zero_grid(int a, int b,int c){
+	grid3d out(a, allocate_zero_grid(b,c));
+	return out;
+}
+inline grid4d allocate_zero_grid(int a, int b,int c, int d){
+	grid4d out(a, allocate_zero_grid(b,c,d));
+	return out;
+}
 
 
 
 
 
-
-template<typename T>
-void möbius_inversion(std::vector<T>& x, bool zero_pad=true){
+void möbius_inversion(std::vector<int>& x, bool zero_pad){
 	// const int n = x.size();
 	// is_in_range = [n](int i){return i>= 0 && i < n;};
 	if (zero_pad)
@@ -70,11 +81,12 @@ void möbius_inversion(std::vector<T>& x, bool zero_pad=true){
 		x[i] = b-a;
 	}
 }
-template<typename T> // warning
-void möbius_inversion(const std::vector<T*>& x, bool zero_pad, int pointer_shift){
+void möbius_inversion(const std::vector<int*>& x, int pointer_shift, bool zero_pad){
 	// const int n = x.size();
 	// is_in_range = [n](int i){return i>= 0 && i < n;};
 	int a=0,b=0;
+	if (zero_pad)
+		*(x.back()+pointer_shift) = 0;
 	for (int i = 0; i < x.size(); i++){
 		a = i == 0 ? 0 : b;
 		b = *(x[i]+pointer_shift);
@@ -82,31 +94,93 @@ void möbius_inversion(const std::vector<T*>& x, bool zero_pad, int pointer_shif
 	}
 }
 
-template<typename T>
-void möbius_inversion(std::vector<std::vector<T>>& x, bool zero_pad=true, int axis = -1){
+inline void möbius_inversion2d(const std::vector<int*>& x, int max_pointer_shift, bool zero_pad){
+	tbb::parallel_for(
+		0,max_pointer_shift,[&](int j){ // x is assumed to be a matrix
+			möbius_inversion(x, j, zero_pad);
+		}
+	);
+}
+
+inline void möbius_inversion3d(const std::vector<std::vector<int*>>& x, int max_pointer_shift, bool zero_pad){
+	tbb::parallel_for(
+		0,static_cast<int>(x.size()),[&](int j){
+			möbius_inversion(x[j], max_pointer_shift, zero_pad);
+		}
+	);
+}
+
+
+void möbius_inversion(grid2d& x, bool zero_pad, int axis = -1){
 	// const int n = x.size();
 	// is_in_range = [n](int i){return i>= 0 && i < n;};
 	if (axis == 0 or axis < 0){
 		tbb::parallel_for(
 			0,static_cast<int>(x.size()),[&](int i){
-				möbius_inversion(x[i]);
+				möbius_inversion(x[i], zero_pad);
 			}
 		);
 	}
 	if (axis == 1 or axis < 0){
-		if (zero_pad){
-			x.back() = std::vector<T>(x[0].size(),0);
-		}
-		std::vector<T*> row_pointers(x.size());
+		// if (zero_pad){
+		// 	x.back() = std::vector<int>(x[0].size(),0);
+		// }
+		std::vector<int*> row_pointers(x.size());
 		for (unsigned int i=0; i < x.size();i++)
 			row_pointers[i] = &x[i][0];
 		tbb::parallel_for(
 			0,static_cast<int>(x[0].size()),[&](int j){ // x is assumed to be a matrix
-				möbius_inversion(row_pointers, zero_pad, j);
+				möbius_inversion(row_pointers, j, zero_pad);
 			}
 		);
 	}
 }
+
+
+void möbius_inversion(grid3d& x, bool zero_pad){
+	// axes 1 and 2
+	tbb::parallel_for(
+		0,static_cast<int>(x.size()),[&](int i){
+			möbius_inversion(x[i], zero_pad);
+		}
+	);
+	// axe 0
+	// if (zero_pad)
+	// 	x.back() = allocate_zero_grid(x[0].size(), x[0][0].size());
+	
+	std::vector<int*> row_pointers(x.size());
+	for (unsigned int j = 0; j< x[0].size(); j++){
+		for (unsigned int i=0; i < x.size();i++){
+			row_pointers[i] = &x[i][j][0];
+		}
+		for (unsigned int k=0; k<x[0][0].size();k++)
+			möbius_inversion(row_pointers,k, zero_pad);
+	}
+}
+
+void möbius_inversion(grid4d& x, bool zero_pad){
+	// axes 1, 2, and 3
+	tbb::parallel_for(
+		0,static_cast<int>(x.size()),[&](int i){
+			möbius_inversion(x[i], zero_pad);
+		}
+	);
+	// axe 0
+	if (zero_pad)
+		x.back() = allocate_zero_grid(x[0].size(), x[0][0].size(), x[0][0][0].size());
+	
+	std::vector<int*> row_pointers(x.size());
+	for (unsigned int j = 0; j< x[0].size(); j++){
+		for (unsigned int k=0; k<x[0][0].size();k++){
+			for (unsigned int i=0; i < x.size();i++){
+				row_pointers[i] = &x[i][j][k][0];
+			}
+			for (unsigned int l=0; l<x[0][0][0].size();l++)
+				möbius_inversion(row_pointers,l, zero_pad);
+		}
+	}
+}
+
 
 signed_measure sparsify(const grid2d& tensor){
 	signed_measure out;
@@ -346,7 +420,7 @@ inline value_type horizontal_line_filtration(const std::vector<value_type> &x, v
 /// @param j free coordinate;
 /// @param fixed_values when the simplextree is more than 2 parameter, the non-free coordinate have to be specified, i.e. on which "plane" to compute the hilbert function.
 /// @return the hilbert function
-grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, bool mobius_inversion=false, int i = 0, int j = 1, const std::vector<value_type> fixed_values = {}){
+grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, int i = 0, int j = 1, const std::vector<value_type> fixed_values = {}){
 	if (grid_shape.size() < 2 || st_multi.get_number_of_parameters() < 2)
 		throw std::invalid_argument("Grid shape has to have at least 2 element.");
 	if (st_multi.get_number_of_parameters() - fixed_values.size() != 2)
@@ -389,8 +463,6 @@ grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 			}
 		}
 	});
-	if (mobius_inversion)
-		möbius_inversion<int>(out);
 	return out;
 }
 /// @brief /!\ DANGEROUS /!\ For python only. 
@@ -430,7 +502,7 @@ grid3d get_3Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 		std::vector<value_type> _fixed_values(fixed_values.size() +1);
 		_fixed_values[0] = static_cast<value_type>(z);
 		std::copy(fixed_values.begin(), fixed_values.end(), _fixed_values.begin()+1);
-		out[z] = get_2Dhilbert(st_multi, grid_shape, degree,false, j,k, _fixed_values);
+		out[z] = get_2Dhilbert(st_multi, grid_shape, degree, j,k, _fixed_values);
 	});
 	return out;
 }
@@ -494,98 +566,173 @@ inline void add_above(grid4d& x, const options_multi::Filtration_value& threshol
 	}
 }
 
-template<typename ndarray>
-inline void compute_euler(ndarray& out, Simplex_tree_multi& st_multi){
-	for (auto &sh : st_multi.complex_simplex_range()){
-		auto filtration = st_multi.filtration((sh));
-		int sign = 1-2*(st_multi.dimension(sh) % 2);
-		add_above(out, filtration, sign);
+inline void add_at(grid1d& x, options_multi::value_type at, int value, bool threshold=false){
+	x[static_cast<size_t>(at)] += value;
+	if (threshold)
+		x.back() -= value;
+}
+inline void add_at(grid2d& x, const options_multi::Filtration_value& at, int value, bool threshold=false){
+	x[static_cast<size_t>(at[0])][static_cast<size_t>(at[1])] += value;
+	if (threshold){
+		x[static_cast<size_t>(at[0])].back() -= value;
+		x.back()[static_cast<size_t>(at[1])] -= value;
+		x.back().back() += value;
+	}
+}
+inline void add_at(grid3d& x, const options_multi::Filtration_value& at, int value, bool threshold=false){
+	x[static_cast<size_t>(at[0])][static_cast<size_t>(at[1])][static_cast<size_t>(at[2])] += value;
+	if (threshold){
+		x[static_cast<size_t>(at[0])][static_cast<size_t>(at[1])].back() -= value;
+		x[static_cast<size_t>(at[0])].back()[static_cast<size_t>(at[2])] -= value;
+		x.back()[static_cast<size_t>(at[1])][static_cast<size_t>(at[2])] -= value;
+
+		x[static_cast<size_t>(at[0])].back().back() += value;
+		x.back().back()[static_cast<size_t>(at[2])] += value;
+		x.back()[static_cast<size_t>(at[1])].back() += value;
+
+		x.back().back().back() -= value;
+	}
+}
+inline void add_at(grid4d& x, const options_multi::Filtration_value& at, int value, bool threshold=false){
+	int a =static_cast<int>(at[0]), b =static_cast<int>(at[1]), c =static_cast<int>(at[2]), d =static_cast<int>(at[3]);
+	x[a][b][c][d] += value;
+
+	if (threshold){
+		x.back()[b][c][d] -= value;
+		x[a].back()[c][d] -= value;
+		x[a][b].back()[d] -= value;
+		x[a][b][c].back() -= value;
+
+		x.back().back()[c][d] += value;
+		x.back()[b].back()[d] += value;
+		x.back()[b][c].back() += value;
+
+		x[a].back().back()[d] += value;
+		x[a].back()[c].back() += value;
+		x[a][b].back().back() += value;
+
+		x[a].back().back().back() -= value;
+		x.back()[b].back().back() -= value;
+		x.back().back()[c].back() -= value;
+		x.back().back().back()[d] -= value;
+
+		x.back().back().back().back() += value;
+
 	}
 }
 
-inline grid2d allocate_zero_grid(int a, int b){
-	grid2d out(a, std::vector<int>(b,0));
-	return out;
-}
-inline grid3d allocate_zero_grid(int a, int b,int c){
-	grid3d out(a, allocate_zero_grid(b,c));
-	return out;
-}
-inline grid4d allocate_zero_grid(int a, int b,int c, int d){
-	grid4d out(a, allocate_zero_grid(b,c,d));
-	return out;
+template<typename ndarray>
+inline void compute_euler(ndarray& out, Simplex_tree_multi& st_multi, bool inverse=false, bool threshold = false){
+	for (auto &sh : st_multi.complex_simplex_range()){
+		auto filtration = st_multi.filtration((sh));
+		int sign = 1-2*(st_multi.dimension(sh) % 2);
+		if (inverse){
+			add_at(out, filtration, sign, threshold);
+		}
+		else
+			add_above(out, filtration, sign);
+	}
 }
 
 
 
-grid2d get_euler2d(const intptr_t simplextree_ptr, const std::vector<int> &grid_shape){
-	// Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
-	auto &st_multi = get_simplextree_from_pointer<options_multi>(simplextree_ptr);
+
+
+grid2d get_euler2d(Simplex_tree_multi& st_multi, const std::vector<int> &grid_shape, bool inverse, bool threshold){
 	if (grid_shape.size() != 2){
 		std::cerr << "Use a 2d grid shape."<<std::endl;
 		return grid2d();
 	}
 	grid2d out = allocate_zero_grid(grid_shape.at(0),grid_shape.at(1));
-	compute_euler(out, st_multi);
-	// for (auto &sh : st_multi.complex_simplex_range()){
-	// 	auto filtration = st_multi.filtration((sh));
-	// 	int sign = 1-2*(st_multi.dimension(sh) % 2);
-	// 	add_above(out, filtration, sign);
-	// }
+	compute_euler(out, st_multi, inverse, threshold);
 	return out;
 }
+template<typename ... Args>
+grid2d get_euler2d(const intptr_t simplextree_ptr, Args...args){
+	auto &st_multi = get_simplextree_from_pointer<Simplex_tree_options_multidimensional_filtration>(simplextree_ptr);
+	return get_euler2d(st_multi, args...);
+}
 
-
-grid3d get_euler3d(const intptr_t simplextree_ptr, const std::vector<int> &grid_shape){
-	// Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
-	auto &st_multi = get_simplextree_from_pointer<options_multi>(simplextree_ptr);
+grid3d get_euler3d(Simplex_tree_multi& st_multi, const std::vector<int> &grid_shape, bool inverse, bool threshold){
 	if (grid_shape.size() != 3){
 		std::cerr << "Use a 3d grid shape."<<std::endl;
 		return grid3d();
 	}
 	grid3d out = allocate_zero_grid(grid_shape.at(0), grid_shape.at(1), grid_shape.at(2));
-	compute_euler(out, st_multi);
+	compute_euler(out, st_multi, inverse, threshold);
 	return out;
 }
-grid4d get_euler4d(const intptr_t simplextree_ptr, const std::vector<int> &grid_shape){
-	// Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
-	auto &st_multi = get_simplextree_from_pointer<options_multi>(simplextree_ptr);
+template<typename ... Args>
+grid3d get_euler3d(const intptr_t simplextree_ptr, Args...args){
+	auto &st_multi = get_simplextree_from_pointer<Simplex_tree_options_multidimensional_filtration>(simplextree_ptr);
+	return get_euler3d(st_multi, args...);
+}
+grid4d get_euler4d(Simplex_tree_multi& st_multi, const std::vector<int> &grid_shape, bool inverse, bool threshold){
 	if (grid_shape.size() != 4){
 		std::cerr << "Use a 4d grid shape."<<std::endl;
 		return grid4d();
 	}
 	grid4d out = allocate_zero_grid(grid_shape.at(0), grid_shape.at(1), grid_shape.at(2), grid_shape.at(3));
-	compute_euler(out, st_multi);
+	compute_euler(out, st_multi, inverse, threshold);
 	return out;
 }
+template<typename ... Args>
+grid4d get_euler4d(const intptr_t simplextree_ptr, Args...args){
+	auto &st_multi = get_simplextree_from_pointer<Simplex_tree_options_multidimensional_filtration>(simplextree_ptr);
+	return get_euler4d(st_multi, args...);
+}
 
-// RELOU
-// signed_measure get_sm(const std::string& invariant, bool threshold){
-// 	if (invariant == 'hilbert'){
-// 		if (num_parameters == 2){
-// 			grid2d hilbert
-// 		}
+signed_measure get_signed_measure(
+	const intptr_t simplextree_ptr, const std::vector<int> &grid_shape,
+	int invariant,int degree, bool zero_pad=true
+)
+{
+	auto &st_multi = get_simplextree_from_pointer<options_multi>(simplextree_ptr);
+	int num_parameters = st_multi.get_number_of_parameters();
+	if (invariant == 1){
+		switch (num_parameters)
+		{
+		case 2:{
+			auto out2 = get_2Dhilbert(st_multi,grid_shape,degree);
+			möbius_inversion(out2, zero_pad);
+			return sparsify(out2);
+			break;}
+		case 3:{
+			auto out3 = get_3Dhilbert(st_multi,grid_shape,degree);
+			möbius_inversion(out3, zero_pad);
+			return sparsify(out3);
+			break;}
+		case 4:{
+			auto out4 = get_4Dhilbert(st_multi,grid_shape,degree);
+			möbius_inversion(out4, zero_pad);
+			return sparsify(out4);
+			break;}
+		default:{
+			throw std::invalid_argument("Invalid number of parameters"); 
+			break;}
+		}
+	}
+	if (invariant == 2)
+	{
+		switch (num_parameters)
+		{
+		case 2:{
+			return sparsify(get_euler2d(st_multi,grid_shape, true, zero_pad));
+			break;}
+		case 3:{
+			return sparsify(get_euler3d(st_multi,grid_shape, true, zero_pad));
+			break;}
+		case 4:{
+			return sparsify(get_euler4d(st_multi,grid_shape, true, zero_pad));
+			break;}
+		default:{
+			throw std::invalid_argument("Invalid number of parameters"); 
+			break;}
+		}	
+	}
+	throw std::invalid_argument("Invariant not implemented"); 
 
-// 	}
-// 	{
-		
-// 	}
-
-// }
-
-
-
-
-
-
-template<typename T>
-class SignedMeasure{
-	public:
-	std::vector<std::vector<T>> points;
-	std::vector<int> weights;
-};
-
-
+}
 
 
 

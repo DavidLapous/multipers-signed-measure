@@ -7,7 +7,7 @@ __license__ = ""
 # from distutils.core import setup
 # from distutils.extension import Extension
 from os.path import exists
-from multiprocessing import cpu_count
+# from multiprocessing import cpu_count
 from setuptools import Extension, setup, find_packages
 from Cython.Build import cythonize
 import numpy as np
@@ -16,6 +16,12 @@ from Cython.Compiler import Options
 Options.docstrings = True
 Options.embed_pos_in_docstring = True
 Options.fast_fail = True
+
+import os
+os.environ['CC']='g++'
+CONDA_PATH=os.environ.get('CONDA_PREFIX')
+if CONDA_PATH is None: CONDA_PATH = ""
+
 
 ## Regenerate cpp files using Cython
 USE_CYTHON=True
@@ -32,7 +38,7 @@ cython_compiler_directives = {
 
 cythonize_flags = {
     # "depfile":True,
-    "nthreads": (int)((cpu_count()//2) + 1),
+    # "nthreads": (int)((cpu_count()//2) + 1),
     # "show_all_warnings":True,
 }
 
@@ -41,11 +47,10 @@ extensions = [Extension(f"multipers.{module}",
                         language='c++',
                         extra_compile_args=[
                             "-O3",
-                            #"-march=native",
-                            # "-g0",
+                            # "-march=native",
                             "-std=c++20",
                             '-ltbb',
-                            "-Wall"
+                            "-Wall",
                         ],
                         extra_link_args=['-ltbb'],
                         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
