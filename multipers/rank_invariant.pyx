@@ -128,19 +128,62 @@ def euler(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, degree:int=N
 
 def signed_measure(
 	simplextree:SimplexTreeMulti,
-	grid_shape:np.ndarray|list=None, 
+	grid_shape:np.ndarray|list|int|None=None, 
 	degree:int|None=None, 
 	bool zero_pad=True, 
 	grid_conversion=None,
-	bool unsparse=False):
+	bool unsparse=False,
+	invariant:str | None=None):
+	"""
+	Computes a discrete signed measure from various invariants.
+
+	Parameters
+	----------
+	- simplextree : SimplexTreeMulti
+		The multifiltered complex on which to compute the invariant.
+		The filtrations values are assumed to be the coordinates in that filtration, i.e. integers
+	- grid_conversion : Iterable[int]
+		Reconverts the coordinate signed measure in that grid. 
+	- grid_shape : Iterable[int] or Int or None:
+		The coordinate grid shape. 
+		If int, every parameter gets this resolution. 
+		If None and grid_conversion is also None, the grid is infered from the filtration values.
+	- degree : int|None
+		If the invariant is hilbert or the rank invariant, the homological degree.
+		If the invariant is euler, this parameter is ignored.
+	- zero_pad=True : bool
+		Zeros out the end of the grid, to enfore a 0-mass measure.
+	- unsparse = False : bool
+		Unsparse the output.
+	- invariant = None : str
+		The invariant to use to compute the signed measure. 
+		Possible options : 'euler' or 'hilbert' or 'rank_invariant'
+	
+	Output
+	------
+
+	Default
+		- dirac locations : np.ndarray of shape (num_diracs x simplextree.num_parameters)
+		- dirac weights : np.ndarray of shape (num_diracs)
+	
+	if unsparse is true, returns the unsparsified tensor. 
+	"""
+
 	if degree is None:
+		assert invariant not in ["hilbert", "rank_invariant"], f"Provide a degree to compute {invariant} !"
 		invariant=2
 		degree=0
 	else:
-		invariant=1
-	assert grid_conversion is not None or grid_shape is not None
-	if grid_shape is None:
-		grid_shape = [len(f) for f in grid_conversion]
+		invariant=1 if invariant is None or invariant is "hilbert" else 3
+	if grid_conversion is None and grid_shape is None:
+		grid_shape = np.asarray(simplextree.filtration_bounds()[1], dtype=int)+2
+	try:
+		int(grid_shape)
+		grid_shape = [grid_shape]*simplextree.num_parameters
+	except:
+		if grid_shape is None:
+			grid_shape = [len(f) for f in grid_conversion]
+		None
 	cdef intptr_t ptr = simplextree.thisptr
 	cdef vector[int] c_grid_shape = grid_shape
 	cdef signed_measure_type out
@@ -155,7 +198,9 @@ def signed_measure(
 			return pts,weights
 	if unsparse:
 		from torch import sparse_coo_tensor
-		return np.asarray(sparse_coo_tensor(indices=pts.T,values=weights, size=grid_shape, dtype=weights.dtype).to_dense(), dtype=weights.dtype)
+		if invariant == 3:
+			grid_shape = list(grid_shape) + list(grid_shape)
+		return np.asarray(sparse_coo_tensor(indices=pts.T,values=weights, size=tuple(grid_shape)).to_dense(), dtype=weights.dtype)
 	
 	if grid_conversion is not None:
 		coords = np.empty(shape=pts.shape, dtype=float)
@@ -164,95 +209,3 @@ def signed_measure(
 	else:
 		coords = pts
 	return coords, weights
-
-
-# def trivial_rectangle(rectangle:np.ndarray, betti:np.ndarray):
-# 	"""
-# 	Checks if rectangle is trivial, i.e.,
-# 		- if the betti is zero
-# 		- if birth is not smaller than death
-# 	"""
-# 	num_parameters = rectangle.shape[0] // 2
-# 	birth = np.asarray(rectangle[:num_parameters])
-# 	death = np.asarray(rectangle[num_parameters:])
-# 	r = betti[*rectangle]
-# 	if r == 0:  return True
-# 	if np.any(birth>death): return True
-# 	return False
-
-# def rectangle_to_betti(rectangle:np.ndarray, betti:np.ndarray):
-# 		"""
-# 		Splits birth, death, r and does the grid conversion if necessary.
-# 		"""
-# 		birth = np.array(rectangle[:num_parameters])
-# 		death = np.asarray(rectangle[num_parameters:])
-# 		r = betti[*rectangle]
-
-# 		if not grid_conversion is None:
-# 			birth = np.asarray([grid_conversion[i,bi] for i,bi in enumerate(birth)])
-# 			death = np.asarray([grid_conversion[i,di] for i,di in enumerate(death)])
-# 		return birth, death, r
-
-
-
-# def tensor_to_rectangle(betti:np.ndarray, plot = False, grid_conversion=None):
-# 	"""
-# 	Turns a betti/rank tensor to its rank decomposition format.
-
-# 	Parameters
-# 	----------
-# 	- betti rank tensor format
-# 	- plot : if true, plots the rectangle decomposition
-# 	- grid_conversion : if the grid is non regular, it can be given here to correct the rectangle endpoints
-
-# 	Returns
-# 	-------
-# 	a list of weighted rectangles of the form [min coordinates, max coordinates, rectangle weight]
-# 	"""
-	
-# 	num_parameters = betti.ndim // 2
-# 	assert num_parameters == 2 or not plot
-# 	grid_iterator = product(*[range(i) for i in betti.shape])
-# 	rectangle_list = [rectangle_to_betti(rectangle=np.asarray(rectangle), betti=betti)
-# 						for rectangle in range(grid_iterator)
-# 						if not trivial_rectangle(rectangle, betti)]
-# 	if plot:
-# 		for b, d, r in rectangle_list: ## TODO Clean this 
-# 			b1,b2 = b
-# 			d1, d2 = d
-# 			c = "blue" if r > 0  else "red"
-# 			plt.plot([b1,d1], [b2,d2], c=c)
-# 	return rectangle_list
-
-
-
-# ##################################### LUIS' BETTI PY 
-
-
-
-# # ctypedef np.npy_intp SIZE_t
-
-# # cdef signed_betti(hilbert_function):
-# # 	# number of dimensions
-# # 	assert hilbert_function.dtype == np.int
-# # 	cdef np.int n = hilbert_function.ndim
-	
-# # 	# pad with zeros at the end so np.roll does not roll over
-# # 	cdef np.ndarray[np.int, ndim=n] hf_padded = np.pad(hilbert_function, [[0, 1]]*n, dtype=np.int)
-# # 	# all relevant shifts (e.g., if n=2, (0,0), (0,1), (1,0), (1,1))
-# # 	cdef np.ndarray[np.int, ndim=2] shifts = np.array(list(itertools.product([0, 1], repeat=n)), dtype=np.int)
-# # 	cdef np.ndarray[np.int, ndim=1] padded_shape = [hf_padded.shape[i] for i in range(hf_padded.ndim)]
-# # 	cdef np.ndarray[np.int, ndim=n] bn = np.zeros(padded_shape, dtype=np.int)
-# # 	cdef np.ndarray[np.int, ndim=1] c_range = list(range(n))
-# # 	for i in range(shifts.shape[0]):
-# # 		# bn += ((-1)**np.sum(shifts[i])) * np.roll(hf_padded, shifts[i], axis=range(n))
-# # 		#((-1)**np.sum(shifts[i], dtype=bool))
-# # 		# 1 -2*np.sum(shifts[i], dtype=bool)
-# # 		bn +=  (1 -2*np.sum(shifts[i,:], dtype=bool)) *  np.roll(hf_padded, shifts[i,:], axis=c_range)
-
-# # 	# with nogil:
-# # 	# 	# for shift in shifts:
-# # 	# 	# remove the padding
-# # 	slices = np.ix_(*[range(0, hilbert_function.shape[i]) for i in range(n)])
-# # 	return bn[slices]
-	

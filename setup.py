@@ -1,11 +1,4 @@
 
-
-__author__ = "David Loiseaux, TODO"
-__copyright__ = "Copyright (C) 2023  Inria"
-__license__ = ""
-
-# from distutils.core import setup
-# from distutils.extension import Extension
 from os.path import exists
 # from multiprocessing import cpu_count
 from setuptools import Extension, setup, find_packages
@@ -16,16 +9,6 @@ from Cython.Compiler import Options
 Options.docstrings = True
 Options.embed_pos_in_docstring = True
 Options.fast_fail = True
-
-import os
-os.environ['CC']='g++'
-CONDA_PATH=os.environ.get('CONDA_PREFIX')
-if CONDA_PATH is None: CONDA_PATH = ""
-
-
-## Regenerate cpp files using Cython
-USE_CYTHON=True
-# USE_CYTHON = not exists("main.cpp")
 
 cython_compiler_directives = {
     "language_level": 3,
@@ -46,7 +29,7 @@ extensions = [Extension(f"multipers.{module}",
                         sources=[f"multipers/{module}.pyx"],
                         language='c++',
                         extra_compile_args=[
-                            "-O3",
+                            "-Ofast",
                             # "-march=native",
                             "-std=c++20",
                             '-ltbb',
@@ -62,6 +45,8 @@ setup(
     description="Multiparameter persistence toolkit",
 	ext_modules=cythonize(
 		extensions, compiler_directives=cython_compiler_directives, **cythonize_flags),
-	packages=find_packages(),
+	packages=find_packages(include=['multipers', 'multipers.*']),
+	package_data={"multipers":["*.pyi"]},
+	python_requires=">=3.10",
 	include_dirs = ['multipers', "multipers/gudhi", np.get_include()],
 )

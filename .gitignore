@@ -1,6 +1,9 @@
 __pycache__
 .vscode
 build
+dist
 *.egg-info
 *.cpp
 *.so
+*.whl
+.DS_Store

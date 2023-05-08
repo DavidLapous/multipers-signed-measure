@@ -34,6 +34,7 @@ struct Simplex_tree_float { // smaller simplextrees
   static const bool store_filtration = true;
   static const bool contiguous_vertices = false;
 };
+// using Simplex_tree_float = Simplex_tree_options_fast_persistence;
 
 using multi_filtrations::Box;
 using Simplex_tree_std = Simplex_tree<Simplex_tree_float>;
@@ -264,18 +265,19 @@ inline void project_to_elbow(std::vector<value_type> &to_project, value_type i, 
 	// return to_project;
 }
 
-using Barcode = std::vector<std::pair<value_type, value_type>>;
-
-
-
+using Barcode = std::vector<std::pair<Simplex_tree_std::Filtration_value, Simplex_tree_std::Filtration_value>>;
 inline Barcode compute_dgm(Simplex_tree_std &st, int degree){
 	st.initialize_filtration();
-	constexpr int coeff_field_characteristic = 2;
-	constexpr int min_persistence = 0;
-	Gudhi::persistent_cohomology::Persistent_cohomology<Simplex_tree_std, Gudhi::persistent_cohomology::Field_Zp> pcoh(st);
+	constexpr int coeff_field_characteristic = 11;
+	constexpr Simplex_tree_std::Filtration_value min_persistence = 0;
+	bool persistence_dim_max = st.dimension() == degree;
+	Gudhi::persistent_cohomology::Persistent_cohomology<Simplex_tree_std, Gudhi::persistent_cohomology::Field_Zp> pcoh(st,persistence_dim_max);
 	pcoh.init_coefficients(coeff_field_characteristic);
 	pcoh.compute_persistent_cohomology(min_persistence);
 	auto persistent_pairs = pcoh.intervals_in_dimension(degree);
+	if constexpr (false) {
+		std::cout << "Number of bars : " << persistent_pairs.size() << "\n";
+	}
 	return persistent_pairs;
 }
 
@@ -317,7 +319,6 @@ using rank_tensor = std::vector<std::vector<std::vector<std::vector<int>>>>;
 // assumes that the simplextree has grid coordinate filtration
 rank_tensor get_2drank_invariant(const intptr_t simplextree_ptr, const std::vector<int> &grid_shape, const int degree){
 	constexpr bool verbose=false;
-	
 
 	Simplex_tree_multi &st_multi = *(Simplex_tree_multi*)(simplextree_ptr);
 	int I = grid_shape[0], J = grid_shape[1];
@@ -432,7 +433,7 @@ grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 	if constexpr(verbose) std::cout << "Grid shape : " << I << " " << J << std::endl;
 	grid2d out(I, std::vector<int>(J,0)); // zero of good size
 	Simplex_tree_std _st;
-	flatten<Simplex_tree_float, Simplex_tree_options_multidimensional_filtration>(_st, st_multi,0U); // copies the st_multi to a standard 1-pers simplextree
+	flatten<Simplex_tree_float, Simplex_tree_options_multidimensional_filtration>(_st, st_multi,-1); // copies the st_multi to a standard 1-pers simplextree
 	tbb::enumerable_thread_specific<Simplex_tree_std> thread_simplex_tree;
 	tbb::parallel_for(0, J,[&](int height){
 		Simplex_tree_std &st_std = thread_simplex_tree.local();
@@ -445,6 +446,11 @@ grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 			multi_filtration = st_multi.filtration(*sh_multi); 
 			value_type horizontal_filtration = horizontal_line_filtration(multi_filtration, height, i,j, fixed_values);
 			st_std.assign_filtration(*sh_standard, horizontal_filtration);
+			if constexpr (verbose){
+				Simplex_tree_multi::Filtration_value splx;
+				for (auto vertex : st_multi.simplex_vertex_range(*sh_multi))	splx.push_back(vertex);
+				std::cout << "Simplex " << splx << "/"<< st_std.num_simplices() << " Filtration multi " << st_multi.filtration(*sh_multi) << " Filtration 1d " <<  st_std.filtration(*sh_standard) << "\n";
+			}
 		}
 		if constexpr(verbose) {
 			std::cout << "Coords : "  << height << " [";
@@ -453,12 +459,16 @@ grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 			std::cout  << "]" << std::endl;
 		}
 		const Barcode barcode = compute_dgm(st_std, degree);
+
 		for(const auto &bar : barcode){
 			auto birth = bar.first;
-			if (birth >= I) // some birth can be infinite
-				continue; 
-			int death = bar.second > I ? I: bar.second; // TODO FIXME 
-			for (int index = birth; index < death; index ++){
+			auto death = bar.second;
+			if constexpr (verbose) std::cout << "BEFORE " << birth << " " << death << " " << I << " \n";
+			death = death > I ? I : death; // TODO FIXME 
+			if constexpr (verbose) std::cout <<"AFTER" << birth << " " << death << " " << I << " \n";
+			if (birth > I) // some birth can be infinite
+				continue;
+			for (int index = static_cast<int>(birth); index < static_cast<int>(death); index ++){
 				out[index][height]++;
 			}
 		}
@@ -689,7 +699,7 @@ signed_measure get_signed_measure(
 {
 	auto &st_multi = get_simplextree_from_pointer<options_multi>(simplextree_ptr);
 	int num_parameters = st_multi.get_number_of_parameters();
-	if (invariant == 1){
+	if (invariant == 1){ //hilbert
 		switch (num_parameters)
 		{
 		case 2:{
@@ -712,7 +722,7 @@ signed_measure get_signed_measure(
 			break;}
 		}
 	}
-	if (invariant == 2)
+	if (invariant == 2) // euler
 	{
 		switch (num_parameters)
 		{
@@ -726,169 +736,27 @@ signed_measure get_signed_measure(
 			return sparsify(get_euler4d(st_multi,grid_shape, true, zero_pad));
 			break;}
 		default:{
-			throw std::invalid_argument("Invalid number of parameters"); 
+			throw std::invalid_argument("Invalid number of parameters. Has to be <= 4."); 
 			break;}
 		}	
 	}
+	if (invariant == 3) // rank invariant
+	{
+		switch (num_parameters)
+		{
+		case 2:{
+			auto rank = get_2drank_invariant(simplextree_ptr, grid_shape, degree);
+			möbius_inversion(rank, false);
+			return sparsify(rank);
+			break;}
+		
+		default:{
+			throw std::invalid_argument("Invalid number of parameters, only 2 parameter supported"); 
+			break;}
+		}
+	} 
 	throw std::invalid_argument("Invariant not implemented"); 
 
 }
 
-
-
-
-// /// @brief Assigns filtration values of the 1 parameter simplextree to the diagonal line filtration values from the multi-parameter st. WARNING: It assumes st_std and st_multi have the SAME SIMPLICES.
-// /// @tparam _options_std 
-// /// @tparam _options_multi 
-// /// @param st 
-// /// @param st_multi 
-// /// @param basepoint 
-// /// @param axis 
-// template<typename value_type>
-// void assign_diagonal_line_filtration(Simplex_tree_std &st_std, Simplex_tree_multi &st_multi, const std::vector<value_type> basepoint, int axis=0,
-// 		value_type max_filtration_value=std::numeric_limits< value_type>::infinity()
-// ){
-// 	Gudhi::multi_filtrations::Line<Simplex_tree_multi::Options::value_type> l(basepoint);
-// 	Simplex_tree_multi::Options::Filtration_value multi_filtration;
-// 	auto sh_standard = st_std.complex_simplex_range().begin();
-// 	auto _end = st_std.complex_simplex_range().end();
-// 	auto sh_multi = st_multi.complex_simplex_range().begin();
-// 	for (;sh_standard != _end; ++sh_multi, ++sh_standard){
-// 		multi_filtration = st_multi.filtration(*sh_multi); 
-// 		if (axis <0)	 axis = 0;
-// 		Simplex_tree_std::Options::value_type projected_filtration = l.push_forward(multi_filtration)[axis];
-// 		if (projected_filtration > max_filtration_value)
-// 			projected_filtration = std::numeric_limits<Simplex_tree_std::value_type>::infinity();
-// 		st_std.assign_filtration(*sh_standard, projected_filtration);
-// 	}
-// }
-
-
-
-// template<typename value_type>
-// Barcode get_barcode_on_line(Simplex_tree_std &st_std, Simplex_tree_multi &st_multi, 
-// 		const std::vector<value_type> basepoint, int degree,
-// 		value_type max_filtration_value=std::numeric_limits<value_type>::infinity()
-// 	){
-// 	if (st_std.num_simplices() != st_multi.num_simplices()){
-// 		// std::cerr << "Reconstructing simplextree...\n";
-// 		flatten<Simplex_tree_float, Simplex_tree_options_multidimensional_filtration>(st_std, st_multi,0U);
-// 	}
-// 	assign_diagonal_line_filtration(st_std,st_multi,basepoint,0);
-// 	const Barcode barcode = compute_dgm(st_std, degree);
-// 	return barcode;
-// }
-
-
-
-
-
-
-
-// grid2d get_2Dlandscapes(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, std::vector<int> ks){
-// 	if (grid_shape.size() < 2 || st_multi.get_number_of_parameters() < 2)
-// 		throw std::invalid_argument("Grid shape has to have at least 2 element.");
-// 	constexpr bool verbose = false;
-// 	if constexpr(verbose)
-// 		tbb::global_control c(tbb::global_control::max_allowed_parallelism, 1);
-// 	int I = grid_shape[0], J = grid_shape[1];
-// 	if constexpr(verbose) std::cout << "Grid shape : " << I << " " << J << std::endl;
-// 	grid2d out(I, std::vector<int>(J,0)); // zero of good size
-// 	Simplex_tree_std _st;
-// 	flatten<Simplex_tree_float, Simplex_tree_options_multidimensional_filtration>(_st, st_multi,0U); // copies the st_multi to a standard 1-pers simplextree
-// 	tbb::enumerable_thread_specific<Simplex_tree_std> thread_simplex_tree;
-// 	tbb::parallel_for(-J+1, I,[&](int i){
-// 		Simplex_tree_std &st_std = thread_simplex_tree.local();
-// 		if (st_std.num_simplices() == 0){ st_std = _st;}
-// 		auto max_filtration_value = std::max(I-1,J-1-i);
-// 		const Barcode barcode = get_barcode_on_line(st_std,st_multi,{i,0},degree, max_filtration_value);
-// 		for(const auto &bar : barcode){
-// 			// Thresholds to box
-// 			auto birth = std::max(bar.first,std::abs(i));
-// 			auto death = std::min(bar.second,max_filtration_value);
-// 			if (birth >= death) continue; 
-			
-// 			// adds the 
-// 			// TODO
-// 		}
-// 	});
-// 	return out;
-	
-// }
-
-// std::vector<Rectangle<int>> signed_barcode(const rank_tensor &rank_invariant){
-// 	Barcode barcode;
-// 	compute_R_S_incl_excl(rank_invariant,barcode);
-// 	std::vector<Rectangle<int>> out;
-// 	out.reserve(barcode.size());
-// 	for (const auto &bar_multiplicity : barcode){
-// 		const Bar &bar = bar_multiplicity.first;
-// 		const int &multiplicity = bar_multiplicity.second;
-// 		Rectangle<int> rectangle({bar.first.first, bar.first.second}, {bar.second.first,bar.second.second}, multiplicity);
-// 		out.push_back(rectangle);
-// 	}
-// 	return out;
-// }
-
-// TODO
-// Turns the filtration values of the newsplxptr to integers, and returns the translation to get them back (up to resolution precision)
-// std::vector<std::vector<double>> sparsify_filtration(const intptr_t newsplxptr, const std::vector<int> resolution){};
-
-// template<typename T>
-// class Elbow{
-//     std::vector<std::vector<T>> grid;
-//     int i, int j;
-
-//     std::vector<T> push_forward(const std::vector<T> &point) const ;
-//     Elbow(grid, i,j);
-// };
-
-
-
-// TODO
-// Create a simplextree with filtration values being the one given by the simplextree multi projected on an elbow
-// void flatten_elbow( //projects filtration to grid of filtration values
-//     const intptr_t splxptr, const intptr_t newsplxptr, 
-//     const std::vector<int> &elbow_coord,
-//     const std::vector<std::vector<double>> &multi_filtration_grid){ // not the best, maybe sorted sets
-//     // Assumes that the filtrations values of splxptr are sparse; the grid is defined by
-//     // num_parameters = 2 for the moment
-//     // return;
-//     Simplex_tree<options_std> &st = *(Gudhi::Simplex_tree<options_std>*)(newsplxptr);
-// 	Simplex_tree<options_multi> &st_multi = *(Gudhi::Simplex_tree<options_multi>*)(splxptr);
-//     int num_parameter = st_multi.get_number_of_parameters();
-	
-//     std::vector<int> index(num_parameter);
-//     for (const auto &simplex_handle : st_multi.complex_simplex_range()){
-// 		// std::vector<int> simplex;
-// 		// for (auto vertex : st_multi.simplex_vertex_range(simplex_handle))
-// 		// 	simplex.push_back(vertex);
-		
-// 		// std::vector<double> f = st_multi.filtration(simplex_handle);
-// 		// if (dimension <0)	 dimension = 0;
-// 		// double new_filtration = l.push_forward(f)[dimension];
-// 		// st.insert_simplex(simplex,new_filtration);
-// 	} 
-//     return;
-// };
-
-// TODO 
-// Rank invariant from simplextree multi
-// for elbow in grid, compute persistence, and extract rank invariant
-
-
-// TODO 
-// Rank invariant to signed measure
-
-
-} // namespace Gudhi
-
-// int main(){
-// 	std::cerr << "0" << std::endl;
-// 	Gudhi::Simplex_tree_multi st;
-// 	std::cout << "1" << std::endl;
-// 	st.insert_simplex_and_subfaces({0,1,2}, {0,0});
-// 	std::cout << 3 << std::endl;
-// 	Gudhi::get_2drank_invariant((intptr_t)(&st),{10,10}, 0);
-// 	return 0;
-// }
+} // namespace rank_invariant

@@ -20,6 +20,7 @@
 #include <boost/intrusive/list.hpp>
 
 #include <map>
+#include <unordered_map>
 #include <utility>
 #include <list>
 #include <vector>
@@ -175,7 +176,7 @@ class Persistent_cohomology {
     // Compute all finite intervals
     for (auto sh : cpx_->filtration_simplex_range()) {
       int dim_simplex = cpx_->dimension(sh);
-      if (cpx_->filtration(sh) == std::numeric_limits<Filtration_value>::infinity()) break;
+      if (cpx_->filtration(sh) == std::numeric_limits<Filtration_value>::infinity()) break; // car ordonnés par filtration
       switch (dim_simplex) {
         case 0:
           break;
@@ -190,7 +191,7 @@ class Persistent_cohomology {
     // Compute infinite intervals of dimension 0
     Simplex_key key;
     for (auto v_sh : cpx_->skeleton_simplex_range(0)) {  // for all 0-dimensional simplices
-      if (cpx_->filtration(v_sh) == std::numeric_limits<Filtration_value>::infinity()) continue;;
+    if (cpx_->filtration(v_sh) == std::numeric_limits<Filtration_value>::infinity()) continue;;
       key = cpx_->key(v_sh);
 
       if (ds_parent_[key] == key  // root of its tree
@@ -729,7 +730,7 @@ class Persistent_cohomology {
   /*  Dictionary establishing the correspondence between the Simplex_key of
    * the root vertex in the union-find ds and the Simplex_key of the vertex which
    * created the connected component as a 0-dimension homology feature.*/
-  std::map<Simplex_key, Simplex_key> zero_cocycles_;
+  std::unordered_map<Simplex_key, Simplex_key> zero_cocycles_;
   /*  Key -> row. */
   std::map<Simplex_key, cocycle> transverse_idx_;
   /* Persistent intervals. */

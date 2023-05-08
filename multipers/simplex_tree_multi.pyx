@@ -353,7 +353,7 @@ cdef class SimplexTreeMulti:
 		# 	out = (out_.first,out_.second.get_vector())
 		# 	yield out
 		# 	preincrement(it)
-		cdef pair[simplex_type,filtration_type] out
+		# cdef pair[simplex_type,filtration_type] out
 		while it != end:
 			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
 			# yield SimplexTreeMulti._pair_simplex_filtration_to_python(out)
@@ -797,50 +797,6 @@ cdef class SimplexTreeMulti:
 		# self.make_filtration_non_decreasing(2)
 		return self
 
-	def to_rivet(self, path="rivet_dataset.txt", degree:int = 1, progress:bool=False, overwrite:bool=False, xbins:int=0, ybins:int=0)->None:
-		""" Create a file that can be imported by rivet, representing the filtration of the simplextree.
-
-		Parameters
-		----------
-		path:str
-			path of the file.
-		degree:int
-			The homological degree to ask rivet to compute.
-		progress:bool = True
-			Shows the progress bar.
-		overwrite:bool = False
-			If true, will overwrite the previous file if it already exists.
-		Returns
-		-------
-		Nothing
-		"""
-		from os.path import exists
-		from os import remove
-		if exists(path):
-			if not(overwrite):
-				raise Exception(f"The file {path} already exists. Use the `overwrite` flag if you want to overwrite.")
-			remove(path)
-		file = open(path, "a")
-		file.write("--datatype bifiltration\n")
-		file.write(f"--homology {degree}\n")
-		file.write(f"-x {xbins}\n")
-		file.write(f"-y {ybins}\n")
-		file.write("--xlabel time of appearance\n")
-		file.write("--ylabel density\n\n")
-		from tqdm import tqdm
-		with tqdm(total=self.num_simplices(), position=0, disable = not(progress), desc="Writing simplex to file") as bar:
-			for dim in range(0,self.dimension()+1): # Not sure if dimension sort is necessary for rivet. Check ?
-				for s,F in self.get_skeleton(dim):
-					if len(s) != dim+1:	continue
-					for i in s:
-						file.write(str(i) + " ")
-					file.write("; ")
-					for f in F:
-						file.write(str(f) + " ")
-					file.write("\n")
-					bar.update(1)
-		file.close()
-		return
 	
 	@property
 	def num_parameters(self)->int:
@@ -951,8 +907,8 @@ cdef class SimplexTreeMulti:
 		cdef vector[vector[vector[value_type]]] out
 		with nogil:
 			out = get_filtration_values(ptr, c_degrees)
+		filtrations_values =  [np.asarray(filtration) for filtration in out]
 		# Removes infs
-		filtrations_values =  [np.asarray(filtration, dtype=float) for filtration in out]
 		if inf_to_nan:
 			for i,f in enumerate(filtrations_values):
 				filtrations_values[i][f == np.inf] = np.nan

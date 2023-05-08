@@ -2011,6 +2011,8 @@ struct Simplex_tree_options_fast_persistence {
   static const bool store_key = true;
   static const bool store_filtration = true;
   static const bool contiguous_vertices = true;
+  static const bool is_multi_parameter = false;
+
 };
 
 /** @}*/  // end addtogroup simplex_tree
