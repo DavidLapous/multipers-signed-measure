@@ -3,21 +3,24 @@
 ## Installation
 The following installs this `multipers` library
 ```sh
-python setup.py build_ext --inplace
-pip install -e .
+pip install .
 ```
-The first line compiles the compiled `.so`s and the second links this python library to the current environment.
 ## Interface
 This library has 3 modules
  - **simplex_tree_multi** : this is more or less the same as gudhi's simplex_tree, but with a vector filtration instead of a real filtration. There are a few usefull functions:
    - `mp.SimplexTreeMulti(<gudhi_simplex_tree>, num_parameters=2)` to convert a gudhi simplextree to a multiparameter simplextree
-   - `SimplexTreeMulti.collapse_edges(<num_collapses>)`
+   - `SimplexTreeMulti.collapse_edges(<num_collapses>)` Simplificates the complex. Only for 2-parameter, 1-critical comlpexes.
+   - `SimplexTreeMulti.filtration_bounds` retrieves the filtrations bounds
+   - `SimplexTreeMulti.fill_lowerstar(node_filtration:ndarray, parameter:int)` set `parameter` axis of the filtration to the lowerstar filtration defined by `node_filtration`. 
+   - `SimplexTreeMulti.get_filtration_grid(resoltion:int, ...)` 
    - `SimplexTreeMulti.grid_squeeze(<filtration_grid>, coordinate_values=False)` to project the filtration values on a grid, if coordinate simplex tree is set to true, will turn the filtration values into coordinates in this grid.
+   - ... 
  - **rank_invariant** :
    - `mp.hilbert(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the n-parameter hilbert function (output is a matrix of betti). Works up to #parameter=4
    - `mp.rank_invariant2d(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the 2-parameter rank invariant 
    output is : $$\mathrm{out}[i][j][k][l] = \mathrm{rk} M_{i,j} \to M_{k,l}$$
    - `mp.euler(<coordinate simplex tree>, <grid_shape>)` computes the euler surface. Works up to #parameter=4
+   - `mp.signed_measure(<coordinate simplex tree>, degree=<int,None>, invariant=<"hilbert","euler","rank_invariant">)` Computes a discrete signed measure from a topological invariant.
  - **multiparameter_module_approximation** : in order to visualize the $n$-modules, to debug.
    - Given a simplextree `st`, an approximation into interval decomposable modules can be computed using
    ```mod = st.persistence_approximation()```
