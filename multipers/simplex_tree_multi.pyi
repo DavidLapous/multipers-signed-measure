@@ -514,6 +514,7 @@ class SimplexTreeMulti:
 		-------
 			A SimplexTree with chosen 1D filtration.
 		"""
+		...
 
 	def set_num_parameter(self, num:int)->None:
 		"""

@@ -76,7 +76,7 @@ void möbius_inversion(std::vector<int>& x, bool zero_pad){
 	if (zero_pad)
 		x.back() = 0;
 	int a=0,b=0;
-	for (int i = 0; i<x.size(); i++){
+	for (unsigned int i = 0; i<x.size(); i++){
 		a = b;
 		b = x[i];
 		x[i] = b-a;
@@ -88,7 +88,7 @@ void möbius_inversion(const std::vector<int*>& x, int pointer_shift, bool zero_
 	int a=0,b=0;
 	if (zero_pad)
 		*(x.back()+pointer_shift) = 0;
-	for (int i = 0; i < x.size(); i++){
+	for (unsigned int i = 0; i < x.size(); i++){
 		a = i == 0 ? 0 : b;
 		b = *(x[i]+pointer_shift);
 		*(x[i]+pointer_shift) = b-a;
@@ -187,8 +187,8 @@ signed_measure sparsify(const grid2d& tensor){
 	signed_measure out;
 	auto& pts = out.first;
 	auto& weights = out.second;
-	for (int i=0; i < tensor.size(); i++){
-		for (int j=0; j < tensor[0].size(); j++){
+	for (int i=0; i < static_cast<int>(tensor.size()); i++){
+		for (int j=0; j < static_cast<int>(tensor[0].size()); j++){
 			if (tensor[i][j] != 0){
 				pts.push_back({i,j});
 				weights.push_back(tensor[i][j]);
@@ -202,9 +202,9 @@ signed_measure sparsify(const grid3d& tensor){
 	signed_measure out;
 	auto& pts = out.first;
 	auto& weights = out.second;
-	for (int i=0; i < tensor.size(); i++){
-		for (int j=0; j < tensor[0].size(); j++){
-			for (int k=0; k < tensor[0][0].size(); k++){
+	for (int i=0; i < static_cast<int>(tensor.size()); i++){
+		for (int j=0; j < static_cast<int>(tensor[0].size()); j++){
+			for (int k=0; k < static_cast<int>(tensor[0][0].size()); k++){
 				if (tensor[i][j][k] != 0){
 					pts.push_back({i,j,k});
 					weights.push_back(tensor[i][j][k]);
@@ -219,10 +219,10 @@ signed_measure sparsify(const grid4d& tensor){
 	signed_measure out;
 	auto& pts = out.first;
 	auto& weights = out.second;
-	for (int i=0; i < tensor.size(); i++){
-		for (int j=0; j < tensor[0].size(); j++){
-			for (int k=0; k < tensor[0][0].size(); k++){
-				for (int l=0;l< tensor[0][0][0].size(); l++){
+	for (int i=0; i < static_cast<int>(tensor.size()); i++){
+		for (int j=0; j < static_cast<int>(tensor[0].size()); j++){
+			for (int k=0; k < static_cast<int>(tensor[0][0].size()); k++){
+				for (int l=0;l< static_cast<int>(tensor[0][0][0].size()); l++){
 					if (tensor[i][j][k][l] != 0){
 						pts.push_back({i,j,k,l});
 						weights.push_back(tensor[i][j][k][l]);
