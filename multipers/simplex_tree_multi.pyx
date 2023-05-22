@@ -34,12 +34,11 @@ ctypedef fused some_float:
 
 from typing import Any
 
-cimport numpy as cnp
+# cimport numpy as cnp
 import numpy as np
-cnp.import_array()
+# cnp.import_array()
 
 from multipers.simplex_tree_multi cimport *
-from multipers.multiparameter_module_approximation import module_approximation, PyModule
 cimport cython
 from gudhi import SimplexTree ## Small hack for typing
 from typing import Iterable
@@ -492,7 +491,7 @@ cdef class SimplexTreeMulti:
 	# 	"""
 	# 	return self.get_ptr().prune_above_filtration(filtration)
 
-	def expansion(self, max_dim)->SimplexTreeMulti:
+	def expansion(self, int max_dim)->SimplexTreeMulti:
 		"""Expands the simplex tree containing only its one skeleton
 		until dimension max_dim.
 
@@ -509,10 +508,8 @@ cdef class SimplexTreeMulti:
 		:param max_dim: The maximal dimension.
 		:type max_dim: int
 		"""
-		cdef int maxdim = max_dim
-		current_dim = self.dimension()
 		with nogil:
-			self.get_ptr().expansion(maxdim)
+			self.get_ptr().expansion(max_dim)
 			# This is a fix for multipersistence. FIXME expansion in c++
 			self.get_ptr().make_filtration_non_decreasing()
 		return self
@@ -529,34 +526,6 @@ cdef class SimplexTreeMulti:
 		with nogil:
 			out = self.get_ptr().make_filtration_non_decreasing()
 		return out
-		
-	## DEPRECATED
-	def make_filtration_non_decreasing_old(self, start_dimension:int = 1):
-		if start_dimension <= 0:
-			start_dimension = 1
-#		cdef Simplex_tree_skeleton_iterator it
-#		cdef Simplex_tree_skeleton_iterator end
-##		cdef Simplex_tree_simplex_handle sh = dereference(it)
-#		cdef pair[vector[int], double] simplex_filtration
-#		cdef int dim
-#		cdef int c_start_dimension = start_dimension
-#		cdef int c_stop_dimension = self.dimension()+1
-#		cdef cnp.ndarray[float, ]
-#		with nogil:
-#			for dim in range(c_start_dimension, c_stop_dimension):
-#				it = self.get_ptr().get_skeleton_iterator_begin(dim)
-#				end = self.get_ptr().get_skeleton_iterator_end(dim)
-#				while it != end:
-#					simplex_filtration = self.get_ptr().get_simplex_and_filtration(dereference(it))
-#					if simplex_filtration.size() == dim+1:
-#						# TODO, 
-#					preincrement(it)
-		for dim in range(start_dimension, self.dimension()+1):
-			for splx, f in self.get_skeleton(dim):
-				if len(splx) != dim + 1:	continue
-				self.assign_filtration(splx, np.max([g for _,g in self.get_boundaries(splx)] + [f], axis=0))
-		# FIXME adapt for multicritical filtrations # TODO : C++
-		return self
 
 	def reset_filtration(self, filtration, min_dim = 0):
 		"""This function resets the filtration value of all the simplices of dimension at least min_dim. Resets all the
@@ -702,12 +671,7 @@ cdef class SimplexTreeMulti:
 		from multipers.multiparameter_module_approximation import module_approximation, PyModule
 		if self.num_simplices() <= 0:
 			return PyModule()
-		f = None
-		for s,g in self.get_simplices():
-			f=g
-			break
-		if len(f) < 2:
-			print("Use standard SimplexTrees for 1-persistence !")
+		assert self.num_parameters > 1, f"Use standard Gudhi for 1-parameter persistence."
 		return module_approximation(self,**kwargs)
 		
 		
@@ -777,19 +741,19 @@ cdef class SimplexTreeMulti:
 				else:
 					n = len(edges)
 					# n = edges.size()
-				
+		#### TODO split this function in 3, as arrays are pickleable, this should be doable in parallel, for multiple simplextrees.	
 		reduced_tree = SimplexTreeMulti(num_parameters=self.num_parameters)
 		
 		## Adds vertices back, with good filtration
 		if self.num_vertices() > 0:
-			vertices = np.array([splx for splx, f in self.get_skeleton(0)], dtype=int).T
-			vertices_filtration = np.array([f for splx, f in self.get_skeleton(0)], dtype=float)
+			vertices = np.asarray([splx for splx, f in self.get_skeleton(0)], dtype=int).T
+			vertices_filtration = np.asarray([f for splx, f in self.get_skeleton(0)], dtype=np.float32)
 			reduced_tree.insert_batch(vertices, vertices_filtration)
 		
 		## Adds edges again
 		if self.num_simplices() - self.num_vertices() > 0:
-			edges_filtration = np.array([f for e,f in edges], dtype=float)
-			edges = np.array([e for e, _ in edges], dtype=int).T
+			edges_filtration = np.asarray([f for e,f in edges], dtype=np.float32)
+			edges = np.asarray([e for e, _ in edges], dtype=int).T
 			reduced_tree.insert_batch(edges, edges_filtration)
 		
 		self.thisptr, reduced_tree.thisptr = reduced_tree.thisptr, self.thisptr # Swaps self and reduced tree (self is a local variable)
@@ -949,9 +913,19 @@ cdef class SimplexTreeMulti:
 			filtrations_values = np.concatenate(self._get_filtration_values(degrees, inf_to_nan=True), axis=1)
 			filtrations_values = [np.unique(filtration) for filtration in filtrations_values]
 			filtrations_values = [filtration[filtration != np.nan] for filtration in filtrations_values]
+			
+			# computes the quantiles to drop
+			if q != 0:
+				boxes = np.asarray([np.nanquantile(filtration, [q, 1-q], axis=1) for filtration in filtrations_values],dtype=float)
+				min_filtration, max_filtration = np.nanmin(boxes, axis=(0,1)), np.nanmax(boxes, axis=(0,1)) # box, birth/death, filtration
+				filtrations_values = [
+					filtration[(m<filtration) * (filtration <M)] 
+					for filtration, m,M in zip(filtrations_values, min_filtration, max_filtration)
+				]
+			
 			return filtrations_values
 		
-		box = self.filtration_bounds(degrees = degrees, q=q, split_dimension=False)
+		box = self.filtration_bounds(degrees = degrees,q=q, split_dimension=False)
 		assert(len(box[0]) == len(box[1]) == len(resolution) == self.num_parameters, f"Number of parameter not concistent. box: {len(box[0])}, resolution:{len(resolution)}, simplex tree:{self.num_parameters}")
 		
 		if grid_strategy == "regular":
