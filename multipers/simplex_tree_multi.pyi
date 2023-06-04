@@ -395,8 +395,22 @@ class SimplexTreeMulti:
 
 		"""
 		...
+	def _reconstruct_from_edge_list(self, edges, swap:bool=True, expand_dimension:int=None):
+		"""
+		Generates a 1-dimensional copy of self, with the edges given as input. Useful for edge collapses
 
-	
+		Input
+		-----
+		 - edges : Iterable[(int,int),(float,float)] ## This is the format of the rust library filtration-domination
+		 - swap : bool
+		 	If true, will swap self and the collapsed simplextrees.
+		 - expand_dim : int
+		 	expands back the simplextree to this dimension
+		Ouput
+		-----
+		The reduced SimplexTreeMulti having only these edges.
+		"""
+		...
 	@property
 	def num_parameters(self)->int:
 		...
@@ -530,7 +544,13 @@ class SimplexTreeMulti:
 		"""
 		...
 	
-	
+
+
+def _collapse_edge_list(edges, num:int=0, full:bool=False, strong:bool=False):
+	"""
+	Given an edge list defining a 1 critical 2 parameter 1 dimensional simplicial complex, simplificates this filtered simplicial complex, using filtration-domination's edge collapser.
+	"""
+	...
 
 
 

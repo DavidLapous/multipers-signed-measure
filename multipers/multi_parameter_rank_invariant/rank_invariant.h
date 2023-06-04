@@ -358,7 +358,7 @@ rank_tensor get_2drank_invariant(const intptr_t simplextree_ptr, const std::vect
 				//Thresholds:
 				if constexpr (verbose) std::cout <<"Bar " << birth << " " << death << std::endl;
 				birth = std::max<int>(birth, j);
-				death = std::min<int>(death, I + i);
+				death = std::min<int>(death, J-1 + i);
 				if constexpr (verbose) std::cout <<"Thresholded Bar " << birth << " " << death << std::endl;
 
 				for (int b = birth; b < death; b ++){
@@ -404,6 +404,12 @@ inline value_type horizontal_line_filtration(const std::vector<value_type> &x, v
 	else
 		return std::numeric_limits<Simplex_tree_std::Filtration_value>::infinity();
 }
+
+// inline assign_std_simplextree_from_multi(Simplex_tree_std& st,const Simplex_tree_multi& st_multi, function_type)
+
+
+
+
 
 // inline assign_std_simplextree_from_multi(Simplex_tree_std& st,const Simplex_tree_multi& st_multi, function_type)
 
@@ -746,7 +752,7 @@ signed_measure get_signed_measure(
 		{
 		case 2:{
 			auto rank = get_2drank_invariant(simplextree_ptr, grid_shape, degree);
-			möbius_inversion(rank, false);
+			möbius_inversion(rank, false); // TODO : this is not exact
 			return sparsify(rank);
 			break;}
 		

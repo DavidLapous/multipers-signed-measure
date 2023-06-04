@@ -30,7 +30,7 @@ ctypedef fused some_float:
 	float
 	double
 
-
+ctypedef vector[pair[pair[int,int],pair[value_type,value_type]]] edge_list_type
 
 from typing import Any
 
@@ -42,7 +42,7 @@ from multipers.simplex_tree_multi cimport *
 cimport cython
 from gudhi import SimplexTree ## Small hack for typing
 from typing import Iterable
-
+from tqdm import tqdm
 
 
 
@@ -74,7 +74,7 @@ cdef class SimplexTreeMulti:
 	# unfortunately 'cdef public Simplex_tree_multi_interface* thisptr' is not possible
 	# Use intptr_t instead to cast the pointer
 	cdef public intptr_t thisptr
-
+	cdef public vector[vector[value_type]] filtration_grid
 
 	# Get the pointer casted as it should be
 	cdef Simplex_tree_multi_interface* get_ptr(self) nogil:
@@ -82,7 +82,7 @@ cdef class SimplexTreeMulti:
 
 	# cdef Simplex_tree_persistence_interface * pcohptr
 	# Fake constructor that does nothing but documenting the constructor
-	def __init__(self, other = None, num_parameters:int=2):
+	def __init__(self, other = None, num_parameters:int=2,):
 		"""SimplexTreeMulti constructor.
 		
 		:param other: If `other` is `None` (default value), an empty `SimplexTreeMulti` is created.
@@ -99,7 +99,7 @@ cdef class SimplexTreeMulti:
 		
 	# The real cython constructor
 	def __cinit__(self, other = None, num_parameters:int=2): #TODO doc
-		if not other is None:
+		if other is not None:
 			if isinstance(other, SimplexTreeMulti):
 				self.thisptr = _get_copy_intptr(other)
 				num_parameters = other.num_parameters
@@ -111,8 +111,7 @@ cdef class SimplexTreeMulti:
 		else:
 			self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
 		self.get_ptr().set_number_of_parameters(num_parameters)
-	
-	# TODO : set number of parameters outside the constructor ?
+		self.filtration_grid=[[]*num_parameters]
 
 	def __dealloc__(self):
 		cdef Simplex_tree_multi_interface* ptr = self.get_ptr()
@@ -268,7 +267,7 @@ cdef class SimplexTreeMulti:
 		"""
 		# TODO C++, to be compatible with insert_batch and multicritical filtrations
 		num_parameters = self.get_ptr().get_number_of_parameters()
-		assert len(filtration) % num_parameters == 0
+		assert filtration is None or len(filtration) % num_parameters == 0
 		if filtration is None:	
 			filtration = np.array([-np.inf]*num_parameters, dtype = float)
 			#self.make_filtration_non_decreasing()
@@ -709,41 +708,37 @@ cdef class SimplexTreeMulti:
 			A (smaller) simplex tree that has the same homology over this bifiltration.
 
 		"""
-		from filtration_domination import remove_strongly_filtration_dominated, remove_filtration_dominated
 		# TODO : find a way to do multiple edge collapses without python conversions.
-		assert self.num_parameters == 2, "Number of parameters has to be 2 to use edge collapses !"
-		if self.dimension() > 1 and not ignore_warning: warn("This method ignores simplices of dimension > 1 !")
-		from tqdm import tqdm
 		if num <= 0:
 			return self
-		max_dimension = self.dimension() if max_dimension is None else max_dimension
-		# edge_list = std::vector<std::pair<std::pair<int,int>, std::pair<value_type, value_type>>>
-		# cdef vector[pair[pair[int,int],pair[value_type,value_type]]] 
-		edges = self.get_edge_list() 
-		# cdef int n = edges.size()
-		n = len(edges)
-		if full:
-			num = 100
-		with tqdm(range(num), total=num, desc="Removing edges", disable=not(progress)) as I:
-			for i in I:
-				if strong:
-					edges = remove_strongly_filtration_dominated(edges) # nogil ?
-				else:
-					edges = remove_filtration_dominated(edges)
-				# Prevents doing useless collapses
-				if len(edges) >= n:
-					if full and strong:
-						strong = False
-						n = len(edges)
-						# n = edges.size() # len(edges)
-					else : 
-						break
-				else:
-					n = len(edges)
-					# n = edges.size()
-		#### TODO split this function in 3, as arrays are pickleable, this should be doable in parallel, for multiple simplextrees.	
-		reduced_tree = SimplexTreeMulti(num_parameters=self.num_parameters)
+		assert self.num_parameters == 2, "Number of parameters has to be 2 to use edge collapses ! This is a limitation of Filtration-domination"
+		if self.dimension() > 1 and not ignore_warning: warn("This method ignores simplices of dimension > 1 !")
 		
+		max_dimension = self.dimension() if max_dimension is None else max_dimension
+
+		# Retrieves the edge list, and send it to filration_domination
+		edges = self.get_edge_list()
+		edges = _collapse_edge_list(edges, num=num, full=full, strong=strong, progress=progress)
+		# Retrieves the collapsed simplicial complex
+		self._reconstruct_from_edge_list(edges, swap=True, expand_dimension=max_dimension)
+		return self
+	def _reconstruct_from_edge_list(self, edges, swap:bool=True, expand_dimension:int=None):
+		"""
+		Generates a 1-dimensional copy of self, with the edges given as input. Useful for edge collapses
+
+		Input
+		-----
+		 - edges : Iterable[(int,int),(float,float)] ## This is the format of the rust library filtration-domination
+		 - swap : bool
+		 	If true, will swap self and the collapsed simplextrees.
+		 - expand_dim : int
+		 	expands back the simplextree to this dimension
+		Ouput
+		-----
+		The reduced SimplexTreeMulti having only these edges.
+		"""
+		reduced_tree = SimplexTreeMulti(num_parameters=self.num_parameters)
+
 		## Adds vertices back, with good filtration
 		if self.num_vertices() > 0:
 			vertices = np.asarray([splx for splx, f in self.get_skeleton(0)], dtype=int).T
@@ -755,12 +750,12 @@ cdef class SimplexTreeMulti:
 			edges_filtration = np.asarray([f for e,f in edges], dtype=np.float32)
 			edges = np.asarray([e for e, _ in edges], dtype=int).T
 			reduced_tree.insert_batch(edges, edges_filtration)
-		
-		self.thisptr, reduced_tree.thisptr = reduced_tree.thisptr, self.thisptr # Swaps self and reduced tree (self is a local variable)
-		self.expansion(max_dimension) # Expands back the simplextree to the original dimension.
-		# self.make_filtration_non_decreasing(2)
-		return self
-
+		if swap:
+			# Swaps the simplextrees pointers
+			self.thisptr, reduced_tree.thisptr = reduced_tree.thisptr, self.thisptr # Swaps self and reduced tree (self is a local variable)
+		if expand_dimension is not None:
+			self.expansion(expand_dimension) # Expands back the simplextree to the original dimension.
+		return self if swap else reduced_tree
 	
 	@property
 	def num_parameters(self)->int:
@@ -948,6 +943,7 @@ cdef class SimplexTreeMulti:
 		cdef vector[vector[value_type]] c_filtration_grid = filtration_grid
 		cdef intptr_t ptr = self.thisptr
 		cdef bool c_coordinate_values = coordinate_values
+		self.filtration_grid = c_filtration_grid
 		with nogil:
 			squeeze_filtration(ptr, c_filtration_grid, c_coordinate_values)
 		return self
@@ -1064,6 +1060,34 @@ cdef class SimplexTreeMulti:
 
 cdef intptr_t _get_copy_intptr(SimplexTreeMulti stree) nogil:
 	return <intptr_t>(new Simplex_tree_multi_interface(dereference(stree.get_ptr())))
+
+
+def _collapse_edge_list(edges, num:int=0, full:bool=False, strong:bool=False, progress:bool=False):
+	"""
+	Given an edge list defining a 1 critical 2 parameter 1 dimensional simplicial complex, simplificates this filtered simplicial complex, using filtration-domination's edge collapser.
+	"""
+	from filtration_domination import remove_strongly_filtration_dominated, remove_filtration_dominated
+	n = len(edges)
+	if full:
+		num = 100
+	with tqdm(range(num), total=num, desc="Removing edges", disable=not(progress)) as I:
+		for i in I:
+			if strong:
+				edges = remove_strongly_filtration_dominated(edges) # nogil ?
+			else:
+				edges = remove_filtration_dominated(edges)
+			# Prevents doing useless collapses
+			if len(edges) >= n:
+				if full and strong:
+					strong = False
+					n = len(edges)
+					# n = edges.size() # len(edges)
+				else : 
+					break
+			else:
+				n = len(edges)
+				# n = edges.size()
+	return edges
 
 
 

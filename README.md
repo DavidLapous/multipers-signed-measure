@@ -1,30 +1,37 @@
-# multipers
+# Multiparameter Persistence using Signed Measures
 
 ## Installation
-The following installs this `multipers` library
+This python library has a C++ backend which needs to be installed. 
+
+### Dependencies
+It has a few dependencies that can be installed with, e.g., conda.
+```sh
+conda create -n python311
+conda activate python311
+conda install python=3.11 boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely -c conda-forge
+pip install filtration-domination
+```
+
+### Compile-install
+The following installs the `multipers` library
 ```sh
 pip install .
 ```
+
+## References
+This library is a fork of the [MMA](https://github.com/DavidLapous/multipers) library, which handles multiparameter simplicial complex structures, aswell as approximation of multiparameter persistence modules *via* interval decompositions.
+
+**Signed measures** are introduced in [Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures](). They are fast, and easily usable in a machine learning context.
+
+2-parameter edge collapses are realized using [filtration_domination](https://github.com/aj-alonso/filtration_domination/).
+
 ## Interface
-This library has 3 modules
- - **simplex_tree_multi** : this is more or less the same as gudhi's simplex_tree, but with a vector filtration instead of a real filtration. There are a few usefull functions:
-   - `mp.SimplexTreeMulti(<gudhi_simplex_tree>, num_parameters=2)` to convert a gudhi simplextree to a multiparameter simplextree
-   - `SimplexTreeMulti.collapse_edges(<num_collapses>)` Simplificates the complex. Only for 2-parameter, 1-critical comlpexes.
-   - `SimplexTreeMulti.filtration_bounds` retrieves the filtrations bounds
-   - `SimplexTreeMulti.fill_lowerstar(node_filtration:ndarray, parameter:int)` set `parameter` axis of the filtration to the lowerstar filtration defined by `node_filtration`. 
-   - `SimplexTreeMulti.get_filtration_grid(resoltion:int, ...)` 
-   - `SimplexTreeMulti.grid_squeeze(<filtration_grid>, coordinate_values=False)` to project the filtration values on a grid, if coordinate simplex tree is set to true, will turn the filtration values into coordinates in this grid.
-   - ... 
- - **rank_invariant** :
-   - `mp.hilbert(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the n-parameter hilbert function (output is a matrix of betti). Works up to #parameter=4
-   - `mp.rank_invariant2d(<coordinate simplex_tree>, <degree>, <grid_shape>)` computes the 2-parameter rank invariant 
-   output is : $$\mathrm{out}[i][j][k][l] = \mathrm{rk} M_{i,j} \to M_{k,l}$$
-   - `mp.euler(<coordinate simplex tree>, <grid_shape>)` computes the euler surface. Works up to #parameter=4
-   - `mp.signed_measure(<coordinate simplex tree>, degree=<int,None>, invariant=<"hilbert","euler","rank_invariant">)` Computes a discrete signed measure from a topological invariant.
- - **multiparameter_module_approximation** : in order to visualize the $n$-modules, to debug.
-   - Given a simplextree `st`, an approximation into interval decomposable modules can be computed using
-   ```mod = st.persistence_approximation()```
-   and if $n = 2$, `mod.plot(degree=1)` will produce a plot of $H_1$.
-   - most of the other functions are explained on [this outdated notebook](https://github.com/DavidLapous/multipers/blob/main/How%20to%20use.ipynb)
-   
-   **Remark :** SimplexTreeMulti can encode multicritical filtration, but they are not handled yet by the 2 other modules.
+Follow the notebooks in the tutorial folder.
+
+## Authors
+David Loiseaux, Luis Scoccola, Mathieu Carrière. 
+
+## Contributions
+Hannah Schreiber
+
+Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue. **Any** contribution is welcome.

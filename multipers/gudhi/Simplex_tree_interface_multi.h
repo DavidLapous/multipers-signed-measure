@@ -317,6 +317,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 			Base::assign_filtration(SimplexHandle, new_filtration_value);
 		}
 	}
+
 	
 };
 

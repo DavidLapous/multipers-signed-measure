@@ -10,6 +10,7 @@ ctypedef vector[vector[int]] grid2D
 ctypedef vector[vector[vector[int]]] grid3D
 ctypedef vector[vector[vector[vector[int]]]] grid4D
 ctypedef pair[vector[vector[int]],vector[int]] signed_measure_type
+ctypedef pair[vector[vector[double]],vector[int]] signed_measure_double_type
 from itertools import product
 
 
@@ -25,6 +26,9 @@ cdef extern from "multi_parameter_rank_invariant/rank_invariant.h" namespace "Gu
 	grid2D get_euler2d(const intptr_t, const vector[int]&, bool, bool) nogil except +
 	grid3D get_euler3d(const intptr_t, const vector[int]&, bool, bool) nogil except +
 	grid4D get_euler4d(const intptr_t, const vector[int]&, bool, bool) nogil except +
+
+cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gudhi::rank_invariant::degree_rips":
+	signed_measure_double_type degree_rips_hilbert_signed_measure(intptr_t, int,int) nogil except +
 
 
 from multipers.simplex_tree_multi import SimplexTreeMulti # Typing hack
@@ -133,7 +137,9 @@ def signed_measure(
 	bool zero_pad=True, 
 	grid_conversion=None,
 	bool unsparse=False,
-	invariant:str | None=None):
+	invariant:str | None=None,
+	plot:bool=False,
+	):
 	"""
 	Computes a discrete signed measure from various invariants.
 
@@ -142,8 +148,9 @@ def signed_measure(
 	- simplextree : SimplexTreeMulti
 		The multifiltered complex on which to compute the invariant.
 		The filtrations values are assumed to be the coordinates in that filtration, i.e. integers
-	- grid_conversion : Iterable[int]
-		Reconverts the coordinate signed measure in that grid. 
+	- grid_conversion : (num_parameter) x (filtration values)
+		Reconverts the coordinate signed measure in that grid.
+		Default behavior is searching the grid in the simplextree.
 	- grid_shape : Iterable[int] or Int or None:
 		The coordinate grid shape. 
 		If int, every parameter gets this resolution. 
@@ -158,6 +165,8 @@ def signed_measure(
 	- invariant = None : str
 		The invariant to use to compute the signed measure. 
 		Possible options : 'euler' or 'hilbert' or 'rank_invariant'
+	- plot : bool
+		Will plot the signed measure if possible, i.e. if num_parameters is 2
 	
 	Output
 	------
@@ -176,7 +185,10 @@ def signed_measure(
 	else:
 		invariant=1 if invariant is None or invariant is "hilbert" else 3
 	if grid_conversion is None and grid_shape is None:
-		grid_shape = np.asarray(simplextree.filtration_bounds()[1], dtype=int)+2
+		if len(simplextree.filtration_grid[0]) > 0:
+			grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
+		else:
+			grid_shape = np.asarray(simplextree.filtration_bounds()[1], dtype=int)+2
 	try:
 		int(grid_shape)
 		grid_shape = [grid_shape]*simplextree.num_parameters
@@ -202,10 +214,41 @@ def signed_measure(
 			grid_shape = list(grid_shape) + list(grid_shape)
 		return np.asarray(sparse_coo_tensor(indices=pts.T,values=weights, size=tuple(grid_shape)).to_dense(), dtype=weights.dtype)
 	
+	
+	
 	if grid_conversion is not None:
 		coords = np.empty(shape=pts.shape, dtype=float)
 		for i in range(coords.shape[1]):
 			coords[:,i] = grid_conversion[i][pts[:,i]]
 	else:
 		coords = pts
+	if plot:
+		import matplotlib.pyplot as plt
+		assert simplextree.num_parameters == 2
+		plt.figure()
+		color_weights = np.empty(weights.shape)
+		color_weights[weights>0] = np.log10(weights[weights>0])+2
+		color_weights[weights<0] = -np.log10(-weights[weights<0])-2
+		if (invariant != "rank_invariant"):
+			plt.scatter(coords[:,0],coords[:,1], c=color_weights, cmap="coolwarm") 
+		else:
+			def _plot_rectangle(rectangle:np.ndarray, weight):
+				x_axis=rectangle[[0,2]]
+				y_axis=rectangle[[1,3]]
+				# color = "blue" if weight > 0 else "red"
+				plt.plot(x_axis, y_axis, c=weight, cmap="coolwarm")
+			for rectangle, weight in zip(signed_measure, weights):
+				_plot_rectangle(rectangle=rectangle, weight=color_weights)
+
 	return coords, weights
+
+
+def degree_rips(simplextree, int num_degrees, int homological_degree):
+	cdef intptr_t ptr = simplextree.thisptr
+	cdef signed_measure_double_type out
+	with nogil:
+		out = degree_rips_hilbert_signed_measure(ptr, num_degrees, homological_degree)
+	pts, weights = np.asarray(out.first), np.asarray(out.second, dtype=int)
+	if len(pts) == 0:	
+		pts=np.empty(shape=(0,2), dtype=float)
+	return  pts,weights
