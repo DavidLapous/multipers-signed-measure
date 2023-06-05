@@ -30,7 +30,7 @@ This library is a fork of the [MMA](https://github.com/DavidLapous/multipers) li
 
 
 ## Authors
-David Loiseaux, Luis Scoccola, Mathieu Carrière. 
+David Loiseaux, Luis Scoccola (Möbius inversion in python), Mathieu Carrière (Sliced Wasserstein). 
 
 ## Contributions
 Hannah Schreiber
