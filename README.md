@@ -17,6 +17,8 @@ The following installs the `multipers` library
 ```sh
 pip install .
 ```
+It has been tested with python 3.11 on Linux (gcc12.2) and Macos (clang14).
+
 ## How to use : tutorial notebooks
 We provide a few notebooks, which explains, in different scenarios, how to use our library. **Take a look at them !** They are in the tutorial folder.
 
