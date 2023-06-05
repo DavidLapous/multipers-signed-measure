@@ -8,7 +8,7 @@ It has a few dependencies that can be installed with, e.g., conda.
 ```sh
 conda create -n python311
 conda activate python311
-conda install python=3.11 boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely -c conda-forge
+conda install python=3.11 boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely numba -c conda-forge
 pip install filtration-domination
 ```
 
@@ -17,6 +17,9 @@ The following installs the `multipers` library
 ```sh
 pip install .
 ```
+## How to use : tutorial notebooks
+We provide a few notebooks, which explains, in different scenarios, how to use our library. **Take a look at them !** They are in the tutorial folder.
+
 
 ## References
 This library is a fork of the [MMA](https://github.com/DavidLapous/multipers) library, which handles multiparameter simplicial complex structures, aswell as approximation of multiparameter persistence modules *via* interval decompositions.
@@ -25,8 +28,6 @@ This library is a fork of the [MMA](https://github.com/DavidLapous/multipers) li
 
 2-parameter edge collapses are realized using [filtration_domination](https://github.com/aj-alonso/filtration_domination/).
 
-## Interface
-Follow the notebooks in the tutorial folder.
 
 ## Authors
 David Loiseaux, Luis Scoccola, Mathieu Carrière. 
