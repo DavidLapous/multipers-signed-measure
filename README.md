@@ -26,7 +26,7 @@ We provide a few notebooks, which explains, in different scenarios, how to use o
 ## References
 This library is a fork of the [MMA](https://github.com/DavidLapous/multipers) library, which handles multiparameter simplicial complex structures, aswell as approximation of multiparameter persistence modules *via* interval decompositions.
 
-**Signed measures** are introduced in [Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures](). They are fast, and easily usable in a machine learning context.
+The usage of signed measures for the vectorization of multiparameter persistence modules was introduced in [Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures](). They are fast, and easily usable in a machine learning context.
 
 2-parameter edge collapses are realized using [filtration_domination](https://github.com/aj-alonso/filtration_domination/).
 
@@ -37,4 +37,5 @@ David Loiseaux, Luis Scoccola (Möbius inversion in python), Mathieu Carrière (
 ## Contributions
 Hannah Schreiber
 
-Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue. **Any** contribution is welcome.
+Feel free to contribute, report a bug on a pipeline, or ask for documentation by opening an issue.<br>
+**Any** contribution is welcome.
