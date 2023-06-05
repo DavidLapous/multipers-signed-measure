@@ -188,6 +188,7 @@ def signed_measure(
 		if len(simplextree.filtration_grid[0]) > 0:
 			grid_conversion = [np.asarray(f) for f in simplextree.filtration_grid]
 		else:
+			## we may want to infer the simplextree filtrations here ?
 			grid_shape = np.asarray(simplextree.filtration_bounds()[1], dtype=int)+2
 	try:
 		int(grid_shape)

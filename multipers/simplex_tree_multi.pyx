@@ -891,6 +891,11 @@ cdef class SimplexTreeMulti:
 		-------
 			List of filtration values, for each parameter, defining the grid.
 		"""
+		try: 
+			int(resolution)
+			resolution = [resolution]*self.num_parameters
+		except:
+			None
 		if resolution is None:
 			resolution = [25]*self.num_parameters
 		if degrees is None:
@@ -929,7 +934,7 @@ cdef class SimplexTreeMulti:
 		raise Exception("Invalid grid strategy. Available ones are regular, quantile, and exact")
 	
 
-	def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, coordinate_values:bool=False):
+	def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, coordinate_values:bool=True):
 		"""
 		Fit the filtration of the simplextree to a grid.
 		
