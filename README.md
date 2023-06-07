@@ -33,7 +33,7 @@ The usage of signed measures for the vectorization of multiparameter persistence
 
 ## Authors
 [David Loiseaux](https://www-sop.inria.fr/members/David.Loiseaux/index.html), [Luis Scoccola](https://luisscoccola.com/) 
-(Möbius inversion in python, degree-rips using [perisistable](https://github.com/LuisScoccola/persistable) and [RIVET](https://github.com/rivetTDA/rivet/)), [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein). 
+(Möbius inversion in python, degree-rips using [persistable](https://github.com/LuisScoccola/persistable) and [RIVET](https://github.com/rivetTDA/rivet/)), [Mathieu Carrière](https://www-sop.inria.fr/members/Mathieu.Carriere/) (Sliced Wasserstein).
 
 ## Contributions
 Hannah Schreiber
