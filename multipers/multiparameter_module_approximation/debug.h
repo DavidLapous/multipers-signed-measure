@@ -64,7 +64,7 @@ private:
 
 template<typename T>
 void disp_vect(std::vector<T> v){
-    for(uint i=0; i< v.size(); i++){
+    for(auto i=0u; i< v.size(); i++){
         std::cout << v[i] << " ";
     }
     std::cout << std::endl;
@@ -88,10 +88,10 @@ void disp_vect(std::vector<std::pair<T,T> > v){
 
 template<typename T>
 void disp_vect(std::vector<std::vector<T>> v, bool show_small = true){
-    for(uint i = 0; i < v.size(); i++){
+    for(auto i = 0u; i < v.size(); i++){
         if(v[i].size() <= 1 && !show_small) continue;
         std::cout << "(";
-        for (uint j = 0; j < v[i].size(); j++){
+        for (auto j = 0u; j < v[i].size(); j++){
             std::cout << v[i][j];
             if(j < v[i].size() - 1) std::cout << " ";
         }

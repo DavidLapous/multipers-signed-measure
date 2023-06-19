@@ -44,6 +44,7 @@ print("Loading dependencies...", end="", flush=True)
 import multipers.ml.one as p1
 import multipers.ml.multi as p2
 import multipers.ml.kernels as mmk
+import multipers.data.graphs as mdg
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.neural_network import MLPClassifier
@@ -250,34 +251,34 @@ print(f"Number of axis : bandwidths ({num_bandwidth}) x num_scales ({num_kernel_
 
 
 ############################ VERSION WITH DISCRETE CONVOLUTION : Faster but smaller precision
-SMF = p2.SignedMeasureFormatter(unsparse=True)
-SMF_parameters = {
-	# "SMF__filtrations_weights": 	[None] if "hilbert" in args.pipeline else p2.get_filtration_weights_grid(num_parameters=num_parameters, weights=[1,.1,10]),
-	"SMF__axis": 					list(range(num_bandwidth)) if args.pipeline.startswith("rd_") else [None],
-	"SMF__resolution":				[20, 50, 100] if num_parameters == 2 else [20],
-}
-SMM2CV = p2.SignedMeasure2Convolution(flatten=True, n_jobs=-1)
-print("Num parameters", num_parameters)
-SMM2CV_parameters = {
-	"SMM2CV__bandwidth":		p2.get_filtration_weights_grid(num_parameters=num_parameters, weights=[1.]+list(np.linspace(.1,10.,args.num_rescales-1)), remove_homothetie=False),
-	# "SMM2CV__resolution": 		[args.out_resolution],
-	# "SMM2CV__infer_grid_strategy":	["exact"], # should be fine in every cases
-}
-
-########## VERSION WITH SPARSE CONVOLUTION : Slower but better precision
-# SMF = p2.SignedMeasureFormatter(unsparse=False, normalize=True)
+# SMF = p2.SignedMeasureFormatter(unsparse=True)
 # SMF_parameters = {
-# 	"SMF__filtrations_weights": 	[None] if "hilbert" in args.pipeline else p2.get_filtration_weights_grid(num_parameters=num_parameters, weights=np.linspace(0.1,10.,args.num_rescales)),
+# 	# "SMF__filtrations_weights": 	[None] if "hilbert" in args.pipeline else p2.get_filtration_weights_grid(num_parameters=num_parameters, weights=[1,.1,10]),
 # 	"SMF__axis": 					list(range(num_bandwidth)) if args.pipeline.startswith("rd_") else [None],
-# 	# "SMF__resolution":				[20, 50, 100] if num_parameters == 2 else [5],
+# 	"SMF__resolution":				[20, 50, 100] if num_parameters == 2 else [20],
 # }
 # SMM2CV = p2.SignedMeasure2Convolution(flatten=True, n_jobs=-1)
 # print("Num parameters", num_parameters)
 # SMM2CV_parameters = {
-# 	"SMM2CV__bandwidth":		[-.001,-0.01, -0.1, -0.2, -0.5],
-# 	"SMM2CV__resolution": 		[args.out_resolution],
-# 	"SMM2CV__infer_grid_strategy":	["exact"], # should be fine in every cases
+# 	"SMM2CV__bandwidth":		p2.get_filtration_weights_grid(num_parameters=num_parameters, weights=[1.]+list(np.linspace(.1,10.,args.num_rescales-1)), remove_homothetie=False),
+# 	# "SMM2CV__resolution": 		[args.out_resolution],
+# 	# "SMM2CV__infer_grid_strategy":	["exact"], # should be fine in every cases
 # }
+
+########## VERSION WITH SPARSE CONVOLUTION : Slower but better precision
+SMF = p2.SignedMeasureFormatter(unsparse=False, normalize=True)
+SMF_parameters = {
+	"SMF__filtrations_weights": 	[None] if "hilbert" in args.pipeline else p2.get_filtration_weights_grid(num_parameters=num_parameters, weights=[1.]+list(np.linspace(.1,1.,args.num_rescales-1))),
+	"SMF__axis": 					list(range(num_bandwidth)) if args.pipeline.startswith("rd_") else [None],
+	# "SMF__resolution":				[20, 50, 100] if num_parameters == 2 else [5],
+}
+SMM2CV = p2.SignedMeasure2Convolution(flatten=True, n_jobs=-1)
+print("Num parameters", num_parameters)
+SMM2CV_parameters = {
+	"SMM2CV__bandwidth":		[0.01,0.1,1.], ## Normalized filtrations
+	"SMM2CV__resolution": 		[args.out_resolution],
+	"SMM2CV__infer_grid_strategy":	["exact"], # should be fine in every cases
+}
 
 
 
@@ -318,7 +319,7 @@ elif args.dataset in ["orbit", "immuno"] or args.dataset.startswith("UCR/"): # p
 	 # TODO pop filtrations, ... from args
 elif args.dataset.startswith("graphs/") or args.dataset.startswith("ModelNet"):
 	ToSimplexTree = p1.Graph2SimplexTree(f=args.filtration)
-	ToSimplexTreeMulti = p2.Graph2SimplexTree(filtrations=args.filtrations)
+	ToSimplexTreeMulti = mdg.Graph2SimplexTree(filtrations=args.filtrations)
 	# STM2SM.infer_filtration_strategy = "exact"
 	STM2SM.num_collapses = 0
 	STM2SM.expand = False
@@ -478,7 +479,7 @@ elif args.pipeline == "sw": # Diagram -> SW -> SVM
 # 		"sw__bandwidth":[0.01, 0.1, 1, 10, 100],
 # 		"sw__num_directions":[10],
 # 		"svm__kernel" : ["precomputed"],
-# 		"svm__C" : [0.01,1, 10, 100, 10pipelines/pipelines_2parameter.py00],
+# 		"svm__C" : [0.01,1, 10, 100, 1000],
 # 	}
 # 	pipe = Pipeline([
 # 		("shuffle", DiagramShuffle()),
@@ -601,17 +602,18 @@ print(pipeline, flush=True)
 print("Final parameters : ", parameters)
 
 
-try: 
-	filtration_grid = ToSignedMeasure.filtration_grid
-	print("Signed Measure Filtration grid : ", filtration_grid)
-except:
-	None
+# try: 
+# 	filtration_grid = ToSignedMeasure.filtration_grid
+# 	print("Signed Measure Filtration grid : ", filtration_grid)
+# except:
+# 	None
 
 from multipers.ml.accuracies import accuracy_to_csv
-
-accuracy_to_csv(
-	X=X, Y=Y, dataset = dataset, cl=classifier, k=args.test_k,
-	shuffle = shuffle,
-	**results_kwargs
-)
+from joblib import parallel_backend
+with parallel_backend('threading', n_jobs=args.n_jobs):
+	accuracy_to_csv(
+		X=X, Y=Y, dataset = dataset, cl=classifier, k=args.test_k,
+		shuffle = shuffle,
+		**results_kwargs
+	)
 # os.system(f"rm -rf {memory}") # removes cache

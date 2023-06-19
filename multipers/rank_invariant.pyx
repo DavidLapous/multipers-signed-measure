@@ -37,7 +37,7 @@ cimport numpy as cnp
 cnp.import_array()
 import numpy as np
 
-# TODO : make a st python flag for coordinate_st, with grid resolution.
+# # TODO : make a st python flag for coordinate_st, with grid resolution.
 def rank_invariant2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int degree):
 	cdef intptr_t ptr = simplextree.thisptr
 	cdef int c_degree = degree
@@ -202,9 +202,13 @@ def signed_measure(
 	cdef signed_measure_type out
 	cdef int cinvariant =invariant
 	cdef int cdegree = degree
-	with nogil:
-		out = get_signed_measure(ptr, c_grid_shape, cinvariant, cdegree, zero_pad)
-	pts, weights = np.asarray(out.first, dtype=int), np.asarray(out.second, dtype=int)
+	if invariant == "rank_invariant":
+		assert simplextree.num_parameters == 2, "Rank invariant computations are limited for 2-parameter simplextree for the moment"
+		pts,weights = rank_invariant2d(simplextree, grid_shape,degree)
+	else:
+		with nogil:
+			out = get_signed_measure(ptr, c_grid_shape, cinvariant, cdegree, zero_pad)
+		pts, weights = np.asarray(out.first, dtype=int), np.asarray(out.second, dtype=int)
 	if len(pts) == 0:	
 		pts=np.empty(shape=(0,simplextree.num_parameters), dtype=float)
 		if not unsparse:
@@ -214,8 +218,6 @@ def signed_measure(
 		if invariant == 3:
 			grid_shape = list(grid_shape) + list(grid_shape)
 		return np.asarray(sparse_coo_tensor(indices=pts.T,values=weights, size=tuple(grid_shape)).to_dense(), dtype=weights.dtype)
-	
-	
 	
 	if grid_conversion is not None:
 		coords = np.empty(shape=pts.shape, dtype=float)
@@ -243,6 +245,29 @@ def signed_measure(
 
 	return coords, weights
 
+def rank_invariant2d(simplextree:SimplexTreeMulti, grid_shape:np.ndarray|list, int degree):
+	cdef intptr_t ptr = simplextree.thisptr
+	cdef int c_degree = degree
+	cdef vector[int] c_grid_shape = grid_shape
+	cdef vector[vector[vector[vector[int]]]] out
+	with nogil:
+		out = get_2drank_invariant(ptr, c_grid_shape, c_degree)
+	from torch import Tensor
+	rank_tensor = Tensor(out).to_sparse()
+	num_parameters = simplextree.num_parameters
+	def _is_trivial(rectangle:np.ndarray):
+		birth=rectangle[:num_parameters]
+		death=rectangle[num_parameters:]
+		return np.all(birth<=death) # and not np.array_equal(birth,death)
+	coords = np.asarray(rank_tensor.indices().T, dtype=int)
+	weights = np.asarray(rank_tensor.values(), dtype=int)
+	correct_indices = np.array([_is_trivial(rectangle) for rectangle in coords])
+	if len(correct_indices) == 0:
+		pts, weights = np.empty((0, num_parameters)), np.empty((0))
+	else:
+		pts = np.asarray(coords[correct_indices])
+		weights = weights[correct_indices]
+	return pts, weights
 
 def degree_rips(simplextree, int num_degrees, int homological_degree):
 	cdef intptr_t ptr = simplextree.thisptr

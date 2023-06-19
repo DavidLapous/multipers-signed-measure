@@ -450,13 +450,31 @@ class SimplexTreeMulti:
 		Nothing
 		"""
 		...
+	def to_rivet(self, path="rivet_dataset.txt", degree:int|None = None, progress:bool=False, overwrite:bool=False, xbins:int|None=None, ybins:int|None=None)->None:
+		""" Create a file that can be imported by rivet, representing the filtration of the simplextree.
+
+		Parameters
+		----------
+		path:str
+			path of the file.
+		degree:int
+			The homological degree to ask rivet to compute.
+		progress:bool = True
+			Shows the progress bar.
+		overwrite:bool = False
+			If true, will overwrite the previous file if it already exists.
+		Returns
+		-------
+		Nothing
+		"""
+		...
 
 
 
 	def _get_filtration_values(self, degrees:Iterable[int], inf_to_nan:bool=False):
 		...
 	
-	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, q:float=0., grid_strategy:str="regular")->Iterable[np.ndarray]:
+	def get_filtration_grid(self, resolution:Iterable[int]|int|None=None, degrees:Iterable[int]|None=None, q:float=0., grid_strategy:str="regular")->Iterable[np.ndarray]:
 		"""
 		Returns a grid over the n-filtration, from the simplextree. Usefull for grid_squeeze. TODO : multicritical
 

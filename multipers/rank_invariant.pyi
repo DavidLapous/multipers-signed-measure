@@ -12,6 +12,7 @@ def signed_measure(
 	zero_pad:bool=True, 
 	grid_conversion:Iterable[Iterable[float]]|None=None,
 	unsparse:bool=False,
+	plot:bool=False,
 	invariant:str|None=None)->tuple[np.ndarray, np.ndarray] | np.ndarray:
 	"""
 	Computes a discrete signed measure from various invariants.
@@ -37,6 +38,8 @@ def signed_measure(
 	- invariant = None : str
 		The invariant to use to compute the signed measure. 
 		Possible options : 'euler' or 'hilbert' or 'rank_invariant'
+	- plot = False : bool
+		Produce a plot for 2-parameter filtration.
 	
 	Output
 	------

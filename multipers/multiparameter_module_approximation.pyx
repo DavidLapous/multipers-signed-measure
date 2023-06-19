@@ -495,7 +495,7 @@ cdef class PyModule:
 		return np.array(euler, dtype=int)
 
 def module_approximation(
-	st:SimplexTreeMulti,
+	st:SimplexTreeMulti|None=None,
 	max_error:float|None = None,
 	box:list|np.ndarray|None = None,
 	threshold:bool = False,
@@ -507,12 +507,14 @@ def module_approximation(
 	max_dimension=np.inf,
 	boundary = None,
 	filtration = None,
-	**kwargs)->PyModule:
+	return_timings:bool = False,
+	**kwargs
+	):
 	"""Computes an interval module approximation of a multiparameter filtration.
 
 	Parameters
 	----------
-	st : n-filtered Simplextree.
+	st : n-filtered Simplextree, or None if boundary and filtration are provided.
 		Defines the n-filtration on which to compute the homology.
 	max_error: positive float
 		Trade-off between approximation and computational complexity.
@@ -529,6 +531,8 @@ def module_approximation(
 		Prints C++ infos.
 	ignore_warning : bool
 		Unless set to true, prevents computing on more than 10k lines. Useful to prevent a segmentation fault due to "infinite" recursion.
+	return_timings : bool
+		If true, will return the time to compute instead (computed in python, using perf_counter_ns).
 	Returns
 	-------
 	PyModule
@@ -556,8 +560,10 @@ def module_approximation(
 
 	if box is None and not(st is None):
 		m,M = st.filtration_bounds()
-	else:
+	elif box is not None:
 		m,M = box
+	else:
+		m, M = np.min(filtration, axis=0), np.max(filtration, axis=0)
 	prod = 1
 	h = M[-1] - m[-1]
 	for i, [a,b] in enumerate(zip(m,M)):
@@ -586,8 +592,15 @@ def module_approximation(
 	cdef bool c_multithread = multithread
 	cdef bool c_verbose = verbose
 	cdef Box[value_type] c_box = Box[value_type](box)
+	if return_timings:
+		from time import perf_counter_ns
+		t = perf_counter_ns()
 	with nogil:
 		c_mod = compute_vineyard_barcode_approximation(c_boundary,c_filtration,c_max_error, c_box, c_threshold, c_complete, c_multithread,c_verbose)
+	if return_timings:
+		t = perf_counter_ns() -t 
+		t /= 10**9
+		return t
 	approx_mod.set(c_mod)
 	return approx_mod
 

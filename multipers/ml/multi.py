@@ -83,7 +83,12 @@ class RipsDensity2SimplexTree(BaseEstimator, TransformerMixin):
 			sparse:float|None=None, num_collapses:int=0, 
 			kernel:str="gaussian", delayed=False,
 			expand_dim:int=1,
-			progress:bool=False, n_jobs:int=-1, rtol:float=1e-4, atol=1e-6, fit_fraction:float=1,
+			progress:bool=False, 
+			n_jobs:int=-1, 
+			rtol:float=1e-3, 
+			atol=1e-4, 
+			fit_fraction:float=1,
+			verbose:bool=False,
 		) -> None:
 		"""
 		The Rips + Density 1-critical 2-filtration.
@@ -100,6 +105,7 @@ class RipsDensity2SimplexTree(BaseEstimator, TransformerMixin):
 		 - progress : bool, shows the calculus status
 		 - n_jobs : number of processes
 		 - fit_fraction : real, the fraction of data on which to fit
+		 - verbose : bool, Shows more information if true.
 		
 		Output
 		------
@@ -121,6 +127,7 @@ class RipsDensity2SimplexTree(BaseEstimator, TransformerMixin):
 		self._scale=None
 		self.fit_fraction=fit_fraction
 		self.expand_dim=expand_dim
+		self.verbose=verbose
 		return
 	def _get_distance_quantiles(self, X, qs):
 		if len(qs) == 0: 
@@ -141,12 +148,18 @@ class RipsDensity2SimplexTree(BaseEstimator, TransformerMixin):
 		st = mp.SimplexTreeMulti(st, num_parameters = 2)
 		codensity = -kde.fit(x).score_samples(x)
 		st.fill_lowerstar(codensity, parameter = 1)
+		if self.verbose: print("Num simplices :", st.num_simplices())
 		if isinstance(self.num_collapses, int):
 			st.collapse_edges(num=self.num_collapses)
+			# if self.progress: print("Num simplices after collapse :", st.num_simplices())
 		elif self.num_collapses == "full":
+			if self.verbose: print("Num simplices before collapse :", st.num_simplices(), end="")
 			st.collapse_edges(full=True)
+			if self.verbose: print(", after collapse :", st.num_simplices(), end="")
 		if self.expand_dim > 1:
 			st.expansion(self.expand_dim)
+			if self.verbose: print(", after expansion :", st.num_simplices(), end="")
+		if self.verbose: print("")
 		return st
 	def fit(self, X:np.ndarray|list, y=None):
 		## default value 0.1 * diameter # TODO rescale density
@@ -158,7 +171,7 @@ class RipsDensity2SimplexTree(BaseEstimator, TransformerMixin):
 		return self
 
 	
-	def transform(self,X):
+	def transform(self,X)->list[mp.SimplexTreeMulti]:
 		with tqdm(X, desc="Computing simplextrees", disable = not self.progress or self.delayed) as data:
 			if self.delayed:
 				return [delayed(self._get_st)(x) for x in data] # delay the computation for the to_module pipe, as simplextrees are not pickle-able.
@@ -303,7 +316,7 @@ def tensor_möbius_inversion(tensor:Tensor|np.ndarray, grid_conversion:Iterable[
 		color_weights[weights<0] = -np.log10(-weights[weights<0])-2
 		plt.scatter(points_filtration[:,0],points_filtration[:,1], c=color_weights, cmap="coolwarm")
 	if (not rank_invariant) or raw: return coords, weights
-	def _is_trivial(rectangle:np.array):
+	def _is_trivial(rectangle:np.ndarray):
 		birth=rectangle[:num_parameters]
 		death=rectangle[num_parameters:]
 		return np.all(birth<=death) # and not np.array_equal(birth,death)
@@ -313,12 +326,11 @@ def tensor_möbius_inversion(tensor:Tensor|np.ndarray, grid_conversion:Iterable[
 	weights = weights[correct_indices]
 	if plot:
 		assert signed_measure.shape[1] == 4 # plot only the rank decompo for the moment
-		from matplotlib.pyplot import plot
 		def _plot_rectangle(rectangle:np.ndarray, weight:float):
 			x_axis=rectangle[[0,2]]
 			y_axis=rectangle[[1,3]]
 			color = "blue" if weight > 0 else "red"
-			plot(x_axis, y_axis, c=color)
+			plt.plot(x_axis, y_axis, c=color)
 		for rectangle, weight in zip(signed_measure, weights):
 			_plot_rectangle(rectangle=rectangle, weight=weight)
 	return signed_measure, weights
@@ -560,7 +572,7 @@ class SimplexTree2SignedMeasure(BaseEstimator,TransformerMixin):
 			filtrations = [np.unique(np.quantile(np.concatenate([x[i] for x in filtrations]), q=np.linspace(0,1,num=self.resolution[i]))) for i in range(num_parameters)]
 		else:
 			raise Exception(f"Strategy {self.infer_filtration_strategy} is not implemented. Available are regular, exact, quantile.")
-		# Adds a last one, to take essensial summands into account
+		# Adds a last one, to take essensial summands into account (This is also prevents the zero pad from destroying information)
 		for i,f in enumerate(filtrations):
 			m,M = f[0], f[-1]
 			filtrations[i] = np.unique(np.append(f, M + 0.1 * (M-m)))
@@ -883,7 +895,7 @@ class SignedMeasureFormatter(BaseEstimator,TransformerMixin):
 
 class SignedMeasure2Convolution(BaseEstimator,TransformerMixin):
 	"""
-	Turns a signed measure into an image
+	Discrete convolution of a signed measure
 
 	Input
 	-----
@@ -896,7 +908,11 @@ class SignedMeasure2Convolution(BaseEstimator,TransformerMixin):
 	 - resolution : int or (num_parameter) : If filtration grid is not given, will infer a grid, with this resolution
 	 - infer_grid_strategy : the strategy to generate the grid. Available ones are regular, quantile, exact
 	 - flatten : if true, the output will be flattened
-	 -
+	 - kernel : kernel to used to convolve the images.
+	 - flatten : flatten the images if True
+	 - progress : progress bar if True
+	 - use_sklearn_convolution : Uses sklearn to compute convolutions, tends to be slower in this pipeline, but has more available kernels.
+	 - plot : Creates a plot Figure.
 
 	Output
 	------
@@ -908,10 +924,11 @@ class SignedMeasure2Convolution(BaseEstimator,TransformerMixin):
 		  kernel="gaussian", 
 	      bandwidth:float|Iterable[float]=1., 
 		  flatten:bool=False, n_jobs:int=1,
-		  resolution:int=None, 
+		  resolution:int|None=None, 
 		  infer_grid_strategy:str="exact",
 		  progress:bool=False, 
 		  use_sklearn_convolution:bool=False,
+		  plot:bool=False,
 		  **kwargs):
 		super().__init__()
 		self.kernel=kernel
@@ -929,6 +946,7 @@ class SignedMeasure2Convolution(BaseEstimator,TransformerMixin):
 		self._bandwidths=None
 		self.diameter=None
 		self.use_sklearn_convolution=use_sklearn_convolution
+		self.plot=plot
 		return
 	def fit(self, X, y=None):
 		## Infers if the input is sparse given X 
@@ -980,19 +998,32 @@ class SignedMeasure2Convolution(BaseEstimator,TransformerMixin):
 	def _transform_from_sparse(self,X):
 		bandwidth = self.bandwidth if self.bandwidth > 0 else -self.bandwidth * self.diameter
 		return convolution_signed_measures(X, filtrations=self.filtration_grid, bandwidth=bandwidth, flatten=self.flatten, n_jobs=self.n_jobs, kernel=self.kernel, sklearn_convolution=self.use_sklearn_convolution)
+	
+	def _plot_imgs(self, imgs:Iterable[np.ndarray]):
+		extent = [self.filtration_grid[0][0], self.filtration_grid[0][-1], self.filtration_grid[1][0], self.filtration_grid[1][-1]]
+		num_degrees = imgs[0].shape[0]
+		num_imgs = len(imgs)
+		fig, axes = plt.subplots(nrows=num_degrees,ncols=num_imgs)
+		if num_imgs==1:	axes=np.asarray([axes])
+		if num_degrees == 1:	axes = np.asarray([axes])
+		for j, img in enumerate(imgs):
+			for i in range(num_degrees):
+				plt.sca(axes[i,j])
+				plt.imshow(img.T, origin="lower", extent=extent, cmap="Spectral")
+		plt.show()
 	def transform(self,X):
 		if self._is_input_sparse is None:	raise Exception("Fit first")
 		if self._is_input_sparse:
-			return self._transform_from_sparse(X)
-		# print("Image from non-sparse")
-		todo = SignedMeasure2Convolution._sm2smi
-		out =  Parallel(n_jobs=self.n_jobs)(delayed(todo)(self, signed_measures) for signed_measures in tqdm(X, desc="Computing images", disable = not self.progress))
-		if self.flatten:	out = [x.flatten() for x in out]
-		# if not self._is_input_sparse and self.flatten:
-		# 	out = [x.flatten() for x in out]
-		# elif self._is_input_sparse and not self.flatten:
-		# 	grid_shape = [len(f) for f in self.filtration_grid]
-		# 	out = [x.reshape(grid_shape) for x in out]
+			out = self._transform_from_sparse(X)
+		else:
+			todo = SignedMeasure2Convolution._sm2smi
+			out =  Parallel(n_jobs=self.n_jobs)(delayed(todo)(self, signed_measures) for signed_measures in tqdm(X, desc="Computing images", disable = not self.progress))
+		if self.plot and not self.flatten:
+			if self.progress:	print("Plotting convolutions...", end="")
+			self._plot_imgs(out)
+			if self.progress:	print("Done !")
+		if self.flatten and not self._is_input_sparse:	out = [x.flatten() for x in out]
+
 		return out
 
 

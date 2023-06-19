@@ -70,7 +70,7 @@ inline grid4d allocate_zero_grid(int a, int b,int c, int d){
 
 
 
-void möbius_inversion(std::vector<int>& x, bool zero_pad){
+inline void möbius_inversion(std::vector<int>& x, bool zero_pad){
 	// const int n = x.size();
 	// is_in_range = [n](int i){return i>= 0 && i < n;};
 	if (zero_pad)
@@ -82,15 +82,17 @@ void möbius_inversion(std::vector<int>& x, bool zero_pad){
 		x[i] = b-a;
 	}
 }
-void möbius_inversion(const std::vector<int*>& x, int pointer_shift, bool zero_pad){
+inline void möbius_inversion(const std::vector<int*>& x, int pointer_shift, bool zero_pad){
 	// const int n = x.size();
 	// is_in_range = [n](int i){return i>= 0 && i < n;};
+	constexpr bool verbose = false;
 	int a=0,b=0;
 	if (zero_pad)
 		*(x.back()+pointer_shift) = 0;
 	for (unsigned int i = 0; i < x.size(); i++){
 		a = i == 0 ? 0 : b;
 		b = *(x[i]+pointer_shift);
+		if constexpr (verbose)	std::cout << "Line "<< i << " old " << a << " new " << b << "\n";
 		*(x[i]+pointer_shift) = b-a;
 	}
 }
@@ -112,33 +114,42 @@ inline void möbius_inversion3d(const std::vector<std::vector<int*>>& x, int max
 }
 
 
-void möbius_inversion(grid2d& x, bool zero_pad, int axis = -1){
+inline void möbius_inversion(grid2d& x, bool zero_pad, int axis = -1){
+	// Last axis mobius inversion can be done when storing the bars
+
 	// const int n = x.size();
 	// is_in_range = [n](int i){return i>= 0 && i < n;};
-	if (axis == 0 or axis < 0){
+	if (axis == 1 or axis < 0){
 		tbb::parallel_for(
 			0,static_cast<int>(x.size()),[&](int i){
 				möbius_inversion(x[i], zero_pad);
 			}
 		);
 	}
-	if (axis == 1 or axis < 0){
-		// if (zero_pad){
-		// 	x.back() = std::vector<int>(x[0].size(),0);
-		// }
-		std::vector<int*> row_pointers(x.size());
-		for (unsigned int i=0; i < x.size();i++)
-			row_pointers[i] = &x[i][0];
-		tbb::parallel_for(
-			0,static_cast<int>(x[0].size()),[&](int j){ // x is assumed to be a matrix
-				möbius_inversion(row_pointers, j, zero_pad);
-			}
-		);
-	}
+	// if (zero_pad){ // axis 0 is already inverted, only need to zero_pad if necessary
+	// 	for( auto i= 0u; i<x.size();i++){
+	// 		x[i].back() = - std::accumulate(x[i].begin(), x[i].end()-1,0);
+	// 	}
+	// }
+
+
+	// if (axis == 0 or axis < 0){
+	// 	// if (zero_pad){
+	// 	// 	x.back() = std::vector<int>(x[0].size(),0);
+	// 	// }
+	// 	std::vector<int*> row_pointers(x.size());
+	// 	for (unsigned int i=0; i < x.size();i++)
+	// 		row_pointers[i] = &x[i][0];
+	// 	tbb::parallel_for(
+	// 		0,static_cast<int>(x[0].size()),[&](int j){ // x is assumed to be a matrix
+	// 			möbius_inversion(row_pointers, j, zero_pad);
+	// 		}
+	// 	);
+	// }
 }
 
 
-void möbius_inversion(grid3d& x, bool zero_pad){
+inline void möbius_inversion(grid3d& x, bool zero_pad){
 	// axes 1 and 2
 	tbb::parallel_for(
 		0,static_cast<int>(x.size()),[&](int i){
@@ -159,7 +170,7 @@ void möbius_inversion(grid3d& x, bool zero_pad){
 	}
 }
 
-void möbius_inversion(grid4d& x, bool zero_pad){
+inline void möbius_inversion(grid4d& x, bool zero_pad){
 	// axes 1, 2, and 3
 	tbb::parallel_for(
 		0,static_cast<int>(x.size()),[&](int i){
@@ -183,7 +194,7 @@ void möbius_inversion(grid4d& x, bool zero_pad){
 }
 
 
-signed_measure sparsify(const grid2d& tensor){
+inline signed_measure sparsify(const grid2d& tensor){
 	signed_measure out;
 	auto& pts = out.first;
 	auto& weights = out.second;
@@ -198,7 +209,7 @@ signed_measure sparsify(const grid2d& tensor){
 	return out;
 }
 
-signed_measure sparsify(const grid3d& tensor){
+inline signed_measure sparsify(const grid3d& tensor){
 	signed_measure out;
 	auto& pts = out.first;
 	auto& weights = out.second;
@@ -215,7 +226,7 @@ signed_measure sparsify(const grid3d& tensor){
 	return out;
 }
 
-signed_measure sparsify(const grid4d& tensor){
+inline signed_measure sparsify(const grid4d& tensor){
 	signed_measure out;
 	auto& pts = out.first;
 	auto& weights = out.second;
@@ -371,7 +382,6 @@ rank_tensor get_2drank_invariant(const intptr_t simplextree_ptr, const std::vect
 						if ((b1 != d1 || b2 == j) && (b2 != d2 || d1 == i)){
 							out[b1][b2][d1][d2]++;
 						}
-							
 					}
 				}
 			}
@@ -427,7 +437,7 @@ inline value_type horizontal_line_filtration(const std::vector<value_type> &x, v
 /// @param j free coordinate;
 /// @param fixed_values when the simplextree is more than 2 parameter, the non-free coordinate have to be specified, i.e. on which "plane" to compute the hilbert function.
 /// @return the hilbert function
-grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, int i = 0, int j = 1, const std::vector<value_type> fixed_values = {}){
+grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, int i = 0, int j = 1, const std::vector<value_type> fixed_values = {}, bool mobius_inverion = false, bool zero_pad=false){
 	if (grid_shape.size() < 2 || st_multi.get_number_of_parameters() < 2)
 		throw std::invalid_argument("Grid shape has to have at least 2 element.");
 	if (st_multi.get_number_of_parameters() - fixed_values.size() != 2)
@@ -469,15 +479,32 @@ grid2d get_2Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 		for(const auto &bar : barcode){
 			auto birth = bar.first;
 			auto death = bar.second;
-			if constexpr (verbose) std::cout << "BEFORE " << birth << " " << death << " " << I << " \n";
-			death = death > I ? I : death; // TODO FIXME 
-			if constexpr (verbose) std::cout <<"AFTER" << birth << " " << death << " " << I << " \n";
+			// if constexpr (verbose) std::cout << "BEFORE " << birth << " " << death << " " << I << " \n";
+			// death = death > I ? I : death; // TODO FIXME 
+			// if constexpr (verbose) std::cout <<"AFTER" << birth << " " << death << " " << I << " \n";
 			if (birth > I) // some birth can be infinite
 				continue;
-			for (int index = static_cast<int>(birth); index < static_cast<int>(death); index ++){
-				out[index][height]++;
+			
+			if (!mobius_inverion){
+				death = death > I ? I : death;
+				for (int index = static_cast<int>(birth); index < static_cast<int>(death); index ++){
+					out[index][height]++;
+				}
 			}
+			else{
+				out[static_cast<int>(birth)][height]++; // No need to do mobius inversion on this axis, it can be done here
+				if (death < I)
+					out[static_cast<int>(death)][height]--;
+				else if (zero_pad)
+				{
+					out.back()[height]--;
+				}
+				
+			}
+			// else 
+			// 	out[I-1][height]--;
 		}
+
 	});
 	return out;
 }
@@ -507,7 +534,7 @@ signed_measure get_2D_SM(Args...args){
 /// @param k free coordinate
 /// @param fixed_values values of the non-free coordinates
 /// @return 
-grid3d get_3Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, int i=0, int j=1, int k=2,const std::vector<value_type> fixed_values = {}){
+grid3d get_3Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, int i=0, int j=1, int k=2,const std::vector<value_type> fixed_values = {}, bool mobius_inverion = false, bool zero_pad=false){
 	if (grid_shape.size() < 3 || st_multi.get_number_of_parameters() < 3 )
 		throw std::invalid_argument("Grid shape has to have at least 3 element.");
 	if (st_multi.get_number_of_parameters() - fixed_values.size() != 3)
@@ -518,7 +545,7 @@ grid3d get_3Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 		std::vector<value_type> _fixed_values(fixed_values.size() +1);
 		_fixed_values[0] = static_cast<value_type>(z);
 		std::copy(fixed_values.begin(), fixed_values.end(), _fixed_values.begin()+1);
-		out[z] = get_2Dhilbert(st_multi, grid_shape, degree, j,k, _fixed_values);
+		out[z] = get_2Dhilbert(st_multi, grid_shape, degree, j,k, _fixed_values, mobius_inverion, zero_pad);
 	});
 	return out;
 }
@@ -533,7 +560,7 @@ grid3d get_3Dhilbert(const intptr_t simplextree_ptr, Args...args){
 	return get_3Dhilbert(st_multi, args...);
 }
 
-grid4d get_4Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, const std::vector<value_type> fixed_values = {}){
+grid4d get_4Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_shape, const int degree, const std::vector<value_type> fixed_values = {}, bool mobius_inverion = false, bool zero_pad=false){
 	if (grid_shape.size() < 4 || st_multi.get_number_of_parameters() < 4)
 		throw std::invalid_argument("Grid shape has to have at least 4 element.");
 	if (st_multi.get_number_of_parameters() - fixed_values.size() != 4)
@@ -542,7 +569,7 @@ grid4d get_4Dhilbert(Simplex_tree_multi &st_multi, const std::vector<int> grid_s
 	grid4d out(grid_shape[0]);
 	// const std::vector<int> _grid = {grid_shape[1],grid_shape[2], grid_shape[3]};
 	tbb::parallel_for(0, static_cast<int>(out.size()), [&](int z){
-		out[z] = get_3Dhilbert(st_multi, grid_shape, degree, 1,2,3, {static_cast<value_type>(z)});
+		out[z] = get_3Dhilbert(st_multi, grid_shape, degree, 1,2,3, {static_cast<value_type>(z)}, mobius_inverion, zero_pad);
 	});
 	return out;
 }
@@ -709,17 +736,17 @@ signed_measure get_signed_measure(
 		switch (num_parameters)
 		{
 		case 2:{
-			auto out2 = get_2Dhilbert(st_multi,grid_shape,degree);
+			auto out2 = get_2Dhilbert(st_multi,grid_shape,degree, 0,1,{},true, zero_pad);
 			möbius_inversion(out2, zero_pad);
 			return sparsify(out2);
 			break;}
 		case 3:{
-			auto out3 = get_3Dhilbert(st_multi,grid_shape,degree);
+			auto out3 = get_3Dhilbert(st_multi,grid_shape,degree,0,1,2,{},true, zero_pad);
 			möbius_inversion(out3, zero_pad);
 			return sparsify(out3);
 			break;}
 		case 4:{
-			auto out4 = get_4Dhilbert(st_multi,grid_shape,degree);
+			auto out4 = get_4Dhilbert(st_multi,grid_shape,degree,{},true, zero_pad);
 			möbius_inversion(out4, zero_pad);
 			return sparsify(out4);
 			break;}

@@ -1,4 +1,5 @@
 # Multiparameter Persistence using Signed Measures
+Scikit-style multiparameter persistent homology python library, using signed measure and their representation for machine learning. 
 
 ## Installation
 This python library has a C++ backend which needs to be installed. 
@@ -24,7 +25,7 @@ We provide a few notebooks, which explains, in different scenarios, how to use o
 
 
 ## References
-This library is a fork of the [MMA](https://github.com/DavidLapous/multipers) library, which handles multiparameter simplicial complex structures, aswell as approximation of multiparameter persistence modules *via* interval decompositions.
+This library is a fork of the [MMA](https://github.com/DavidLapous/multipers) library, which handles multiparameter simplicial complex structures, aswell as approximation of multiparameter persistence modules *via* interval decompositions [[arxiv](https://arxiv.org/abs/2206.02026)].
 
 The usage of signed measures for the vectorization of multiparameter persistence modules was introduced in [Stable Vectorization of Multiparameter Persistent Homology using Signed Barcodes as Measures](https://arxiv.org/abs/2306.03801). They are fast, and easily usable in a machine learning context.
 
