@@ -1,4 +1,3 @@
-from cython cimport numeric
 from libcpp.vector cimport vector
 from libc.stdint cimport intptr_t
 from libcpp cimport bool
@@ -11,7 +10,6 @@ ctypedef vector[vector[vector[int]]] grid3D
 ctypedef vector[vector[vector[vector[int]]]] grid4D
 ctypedef pair[vector[vector[int]],vector[int]] signed_measure_type
 ctypedef pair[vector[vector[double]],vector[int]] signed_measure_double_type
-from itertools import product
 
 
 

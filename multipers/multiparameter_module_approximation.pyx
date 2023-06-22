@@ -11,29 +11,23 @@
 ## PYTHON LIBRARIES
 import gudhi as gd
 import numpy as np
-from typing import List, Union
-from os.path import exists
-from os import remove 
+from typing import List
 from tqdm import tqdm 
 from cycler import cycler
-from joblib import Parallel, delayed
 import pickle as pk
 
 ###########################################################################
 ## CPP CLASSES
-from cython.operator import dereference, preincrement
 from libc.stdint cimport intptr_t
 from libc.stdint cimport uintptr_t
 
 ###########################################################################
 ## CYTHON TYPES
-from cython cimport numeric
 from libcpp.vector cimport vector
 from libcpp.utility cimport pair
 #from libcpp.list cimport list as clist
 from libcpp cimport bool
 from libcpp cimport int
-from libcpp.string cimport string
 
 
 #########################################################################
@@ -46,12 +40,8 @@ from multipers.multiparameter_module_approximation cimport *
 ## Small hack for typing
 from gudhi import SimplexTree
 from multipers.simplex_tree_multi import SimplexTreeMulti
-cimport numpy as cnp
-cnp.import_array()
-
-###########################################################################
-#PYX MODULES
-
+# cimport numpy as cnp
+# cnp.import_array()
 
 ###################################### MMA
 cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::mma":
@@ -800,7 +790,6 @@ def test_module(**kwargs):
 	return mod
 
 def nlines_precision_box(nlines, basepoint, scale, square = False):
-	import math
 	from random import choice, shuffle
 	from sympy.ntheory import factorint
 	h = scale
@@ -906,7 +895,7 @@ def estimate_matching(b1:PyMultiDiagrams, b2:PyMultiDiagrams):
 
 
 #### Functions to estimate precision
-def estimate_error(st:SimplexTreeMulti, module:PyModule, degree:int, nlines = 100, verbose:bool =False):
+def estimate_error(st:SimplexTreeMulti, module:PyModule, degree:int, nlines:int = 100, verbose:bool =False):
 	"""
 	Given an MMA SimplexTree and PyModule, estimates the bottleneck distance using barcodes given by gudhi.
 	
@@ -947,29 +936,3 @@ def estimate_error(st:SimplexTreeMulti, module:PyModule, degree:int, nlines = 10
 	# Computes gudhi barcodes
 	bcs_from_gudhi = [_get_bc_ST(st,basepoint=basepoint, degree=degree) for basepoint in tqdm(basepoints, disable= not verbose, desc = "Computing gudhi barcodes")]
 	return max((bottleneck_distance(a,b) for a,b in tqdm(zip(bcs_from_mod, bcs_from_gudhi), disable = not verbose, total=nlines, desc="Computing bottleneck distances")))
-
-
-
-### Multiparameter Persistence Approximation
-#include "mma_cpp/mma.pyx"
-#include "mma_cpp/plots.pyx"
-#include "mma_cpp/tests.pyx"
-#include "mma_cpp/format_conversions.pyx"
-
-#### Multiparameter simplextrees 
-#include "gudhi/simplex_tree_multi.pyx"
-
-### Distances
-#include "mma_cpp/matching_distance.pyx"
-
-#### Rank invariant over simplex trees
-#include "rank_invariant/rank_invariant.pyx"
-
-
-
-
-
-
-
-
-

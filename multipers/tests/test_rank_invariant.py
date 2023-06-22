@@ -1,25 +1,8 @@
-print("testing...", end="")
 import multipers as mp
 import numpy as np 
 from scipy.sparse import coo_array
 from scipy.ndimage import convolve1d
-
-## This function is from Luis Scoccola
-def signed_betti(hilbert_function, threshold=False, sparse=False):
-    n = len(hilbert_function.shape)
-    res = np.copy(hilbert_function)
-    # zero out the "end" of the Hilbert function
-    if threshold:
-        for dimension in range(n):
-            slicer = tuple([slice(None) if i != dimension else -1 for i in range(n)])
-            res[slicer] = 0
-    weights = np.array([0, 1, -1], dtype=int)
-    for i in range(n):
-        res = convolve1d(res, weights, axis=i, mode="constant", cval=0)
-    if sparse:
-        return coo_array(res)
-    else:
-        return res
+from multipers.ml import signed_betti
 
 
 
@@ -107,8 +90,6 @@ def test_6():
 		tensor = mp.signed_measure(st, degree=1, unsparse=True, zero_pad=False)
 		tensor[*f]-=1
 		assert np.all(tensor == 0), print(np.all(tensor==0))
-
-print("done.")
 
 
 

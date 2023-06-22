@@ -30,7 +30,7 @@ extensions = [Extension(f"multipers.{module}",
                         language='c++',
                         extra_compile_args=[
                             "-Ofast",
-                            "-march=native",
+                            # "-march=native",
                             "-std=c++20",
                             '-ltbb',
                             "-Wall",

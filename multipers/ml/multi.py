@@ -6,9 +6,6 @@ from tqdm import tqdm
 from itertools import product
 from sklearn.neighbors import KernelDensity
 from sklearn.base import BaseEstimator, TransformerMixin
-from .signed_betti import *
-from .invariants_with_persistable import *
-from .sliced_wasserstein import *
 from types import FunctionType
 from typing import Callable,Iterable
 from joblib import Parallel, delayed, cpu_count
@@ -16,7 +13,10 @@ from torch import Tensor
 import matplotlib.pyplot as plt
 from scipy.spatial import distance_matrix
 from scipy.ndimage import gaussian_filter
-from .convolutions import convolution_signed_measures, _pts_convolution_sparse_pts
+from .signed_betti import signed_betti, rank_decomposition_by_rectangles
+from .invariants_with_persistable import hf_degree_rips
+from .sliced_wasserstein import SlicedWassersteinDistance, WassersteinDistance
+from .convolutions import convolution_signed_measures
 
 def get_simplex_tree_from_delayed(x)->mp.SimplexTreeMulti:
 	f,args, kwargs = x
@@ -29,7 +29,6 @@ def get_simplextree(x)->mp.SimplexTreeMulti:
 		return get_simplex_tree_from_delayed(x)
 	else:
 		raise TypeError("Not a valid SimplexTree !")
-	return
 
 
 def infer_grid_from_points(pts:np.ndarray, num:int, strategy:str):
