@@ -31,7 +31,7 @@ ctypedef vector[int] euler_char_list
 
 cdef extern from "multi_filtrations/finitely_critical_filtrations.h" namespace "Gudhi::multi_filtrations":
 	cdef cppclass Finitely_critical_multi_filtration "Gudhi::multi_filtrations::Finitely_critical_multi_filtration<Gudhi::Simplex_tree_options_multidimensional_filtration::value_type>":
-		Finitely_critical_multi_filtration() nogil except +
+		Finitely_critical_multi_filtration()  except + nogil
 		Finitely_critical_multi_filtration(vector[value_type]) except +
 		Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&)
 		filtration_type& get_vector()  nogil
@@ -95,13 +95,13 @@ cdef extern from "Simplex_tree_interface_multi.h" namespace "Gudhi":
 		vector[Simplex_tree_multi_simplex_handle].const_iterator get_filtration_iterator_end() nogil
 		Simplex_tree_multi_skeleton_iterator get_skeleton_iterator_begin(int dimension) nogil
 		Simplex_tree_multi_skeleton_iterator get_skeleton_iterator_end(int dimension) nogil
-		pair[Simplex_tree_multi_boundary_iterator, Simplex_tree_multi_boundary_iterator] get_boundary_iterators(vector[int] simplex) nogil except +
+		pair[Simplex_tree_multi_boundary_iterator, Simplex_tree_multi_boundary_iterator] get_boundary_iterators(vector[int] simplex)  except + nogil
 		# Expansion with blockers
 		ctypedef bool (*blocker_func_t)(vector[int], void *user_data)
 		void expansion_with_blockers_callback(int dimension, blocker_func_t user_func, void *user_data)
 
 		## MULTIPERS STUFF
-		void set_keys_to_enumerate() nogil
+		void set_keys_to_enumerate() nogil const
 		int get_key(const simplex_type) nogil
 		void set_key(simplex_type, int) nogil
 		void fill_lowerstar(const vector[value_type]&, int) nogil

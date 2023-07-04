@@ -17,16 +17,16 @@ ctypedef pair[vector[vector[double]],vector[int]] signed_measure_double_type
 
 cdef extern from "multi_parameter_rank_invariant/rank_invariant.h" namespace "Gudhi::rank_invariant":
 	rank2 get_2drank_invariant(const intptr_t, const vector[int]&, const int) nogil
-	grid2D get_2Dhilbert(const intptr_t, const vector[int]&, const int, bool) nogil except +
-	signed_measure_type get_signed_measure(const intptr_t, const vector[int]&, int, int, bool) nogil except +
-	grid3D get_3Dhilbert(const intptr_t, const vector[int]&, const int) nogil except +
-	grid4D get_4Dhilbert(const intptr_t, const vector[int]&, const int) nogil except +
-	grid2D get_euler2d(const intptr_t, const vector[int]&, bool, bool) nogil except +
-	grid3D get_euler3d(const intptr_t, const vector[int]&, bool, bool) nogil except +
-	grid4D get_euler4d(const intptr_t, const vector[int]&, bool, bool) nogil except +
+	grid2D get_2Dhilbert(const intptr_t, const vector[int]&, const int, bool)  except + nogil
+	signed_measure_type get_signed_measure(const intptr_t, const vector[int]&, int, int, bool)  except + nogil
+	grid3D get_3Dhilbert(const intptr_t, const vector[int]&, const int)  except + nogil
+	grid4D get_4Dhilbert(const intptr_t, const vector[int]&, const int)  except + nogil
+	grid2D get_euler2d(const intptr_t, const vector[int]&, bool, bool)  except + nogil
+	grid3D get_euler3d(const intptr_t, const vector[int]&, bool, bool)  except + nogil
+	grid4D get_euler4d(const intptr_t, const vector[int]&, bool, bool)  except + nogil
 
 cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gudhi::rank_invariant::degree_rips":
-	signed_measure_double_type degree_rips_hilbert_signed_measure(intptr_t, int,int) nogil except +
+	signed_measure_double_type degree_rips_hilbert_signed_measure(intptr_t, int,int)  except + nogil
 
 
 from multipers.simplex_tree_multi import SimplexTreeMulti # Typing hack

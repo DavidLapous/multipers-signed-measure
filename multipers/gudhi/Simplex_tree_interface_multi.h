@@ -227,7 +227,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 	return Base::key(Base::find(simplex));
   }
 
-  void set_key(Simplex& simplex, int key){
+  void set_key(const Simplex& simplex, int key){
 	Base::assign_key(Base::find(simplex), key);
 	return;
   }
@@ -276,7 +276,7 @@ class Simplex_tree_interface : public Simplex_tree<SimplexTreeOptions> {
 	return simplex_list;
   }
 // DEPRECATED, USE COORDINATE SIMPLEX TREE
-  euler_chars_type euler_char(std::vector<std::vector<options_multi::value_type>> &point_list){ // TODO multi-critical 
+  euler_chars_type euler_char(const std::vector<std::vector<options_multi::value_type>> &point_list){ // TODO multi-critical 
 		const int npts = point_list.size();
 		if (npts == 0){
 			return {};
