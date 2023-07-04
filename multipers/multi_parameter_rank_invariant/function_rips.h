@@ -217,7 +217,7 @@ signed_measure degree_rips_hilbert_signed_measure(Simplex_tree_std &st, int num_
 
 	// 
 	tbb::enumerable_thread_specific<Simplex_tree_std> thread_simplex_tree;
-	tbb::parallel_for(min_degree, max_degree,[&](int degree){
+	tbb::parallel_for(min_degree, max_degree,[&, &rips_map=rips_map](int degree){ // FIX FOR MACOS :@ RELOU
 		Simplex_tree_std &st_copy = thread_simplex_tree.local();
 		if (st_copy.num_simplices() != st.num_simplices()){ st_copy = st;}
 
