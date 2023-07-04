@@ -18,7 +18,7 @@ The following installs the `multipers` library
 ```sh
 pip install .
 ```
-It has been tested with python 3.11 on Linux (gcc12.2) and Macos (clang14-clang16). If the build fail (on macos) see a fix at the end of the readme. 
+It has been tested with python 3.11 on Linux (gcc12.2) and Macos (clang14-clang16). If the build fails (on macos) see a fix at the end of the readme. 
 
 ## How to use : tutorial notebooks
 We provide a few notebooks, which explains, in different scenarios, how to use our library. **Take a look at them !** They are in the tutorial folder.
@@ -46,7 +46,7 @@ Feel free to contribute, report a bug on a pipeline, or ask for documentation by
 
 
 ## For mac users 
-Due to the clang compiler, one may have to disable a compilator optimization to compile `multipers`: in the setup.py file, add the 
+Due to the clang compiler, one may have to disable a compilator optimization to compile `multipers`: in the `setup.py` file, add the 
 ```bash
 -fno-aligned-new
 ```
