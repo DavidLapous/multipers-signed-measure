@@ -1,7 +1,6 @@
 
 #########################################################################
 ## Small hack for typing
-from gudhi import SimplexTree
 from multipers.simplex_tree_multi import SimplexTreeMulti
 import numpy as np
 

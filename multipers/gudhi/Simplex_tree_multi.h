@@ -55,23 +55,30 @@ Simplex_tree<options>& get_simplextree_from_pointer(const uintptr_t splxptr){ //
 	return st;
 }
 template<class _options_std, class _options_multi>
-void multify(Simplex_tree<_options_std> &st, Simplex_tree<_options_multi> &st_multi, const int dimension){
-	if (dimension <= 0)
+void multify(Simplex_tree<_options_std> &st, Simplex_tree<_options_multi> &st_multi, const int num_parameters, const multi_filtration_type& default_values={}){
+	if (num_parameters <= 0)
 		{std::cerr << "Empty filtration\n"; throw ;}
-	typename _options_multi::Filtration_value f(dimension);
+	// if (default_values.size() -1 > num_parameters)
+	// 	{std::cerr << "default values too large !\n"; throw ;}
+	typename _options_multi::Filtration_value f(num_parameters);
+	for (auto i = 0u; i<std::min(static_cast<unsigned int>(default_values.size()), static_cast<unsigned int>(num_parameters-1));i++)
+		f[i+1] = default_values[i];
+	std::vector<int> simplex;
+	simplex.reserve(st.dimension()+1);
 	for (auto &simplex_handle : st.complex_simplex_range()){
-		std::vector<int> simplex;
+		simplex.clear();
 		for (auto vertex : st.simplex_vertex_range(simplex_handle))
 			simplex.push_back(vertex);
 		f[0] = st.filtration(simplex_handle);
+		// std::cout << "Inserting " << f << "\n";
 		st_multi.insert_simplex(simplex,f);
 	}
 }
 
-void multify(const uintptr_t splxptr, const uintptr_t newsplxptr, const int dimension){ //for python
+void multify(const uintptr_t splxptr, const uintptr_t newsplxptr, const int dimension, const multi_filtration_type& default_values){ //for python
 	auto &st = get_simplextree_from_pointer<options_std>(splxptr);
 	auto &st_multi = get_simplextree_from_pointer<options_multi>(newsplxptr);
-	multify(st, st_multi, dimension);
+	multify(st, st_multi, dimension, default_values);
 }
 
 template<class _options_std, class _options_multi>

@@ -50,7 +50,7 @@ from warnings import warn
 
 
 cdef extern from "Simplex_tree_multi.h" namespace "Gudhi":
-	void multify(const uintptr_t, const uintptr_t, const unsigned int) nogil except +
+	void multify(const uintptr_t, const uintptr_t, const unsigned int, const vector[value_type]&) nogil except +
 	void flatten(const uintptr_t, const uintptr_t, const unsigned int) nogil
 	void flatten_diag(const uintptr_t, const uintptr_t, const vector[value_type], int) nogil
 	void squeeze_filtration(uintptr_t, const vector[vector[value_type]]&, bool) nogil except +
@@ -82,7 +82,7 @@ cdef class SimplexTreeMulti:
 
 	# cdef Simplex_tree_persistence_interface * pcohptr
 	# Fake constructor that does nothing but documenting the constructor
-	def __init__(self, other = None, num_parameters:int=2,):
+	def __init__(self, other = None, num_parameters:int=2,default_values=[]):
 		"""SimplexTreeMulti constructor.
 		
 		:param other: If `other` is `None` (default value), an empty `SimplexTreeMulti` is created.
@@ -98,27 +98,30 @@ cdef class SimplexTreeMulti:
 		"""
 		
 	# The real cython constructor
-	def __cinit__(self, other = None, num_parameters:int=2): #TODO doc
+	def __cinit__(self, other = None, int num_parameters=2, 
+		default_values=[-np.inf], # I'm not sure why `[]` does not work. Cython bug ? 
+		): #TODO doc
+		cdef vector[value_type] c_default_values=default_values
 		if other is not None:
 			if isinstance(other, SimplexTreeMulti):
 				self.thisptr = _get_copy_intptr(other)
 				num_parameters = other.num_parameters
 			elif isinstance(other, SimplexTree): # Constructs a SimplexTreeMulti from a SimplexTree
 				self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
-				multify(other.thisptr, self.thisptr, num_parameters)
+				multify(other.thisptr, self.thisptr, num_parameters, c_default_values)
 			else:
-				raise TypeError("`other` argument requires to be of type `SimplexTree`, or `None`.")
+				raise TypeError("`other` argument requires to be of type `SimplexTree`, `SimplexTreeMulti`, or `None`.")
 		else:
 			self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
 		self.get_ptr().set_number_of_parameters(num_parameters)
-		self.filtration_grid=[[]*num_parameters]
+		self.filtration_grid=[[]*num_parameters] 
 
 	def __dealloc__(self):
 		cdef Simplex_tree_multi_interface* ptr = self.get_ptr()
 		if ptr != NULL:
 			del ptr
 		# if self.pcohptr != NULL:
-		#     del self.pcohptr
+		#     del self.pcohptr 
 
 	def __is_defined(self):
 		"""Returns true if SimplexTree pointer is not NULL.
@@ -270,16 +273,6 @@ cdef class SimplexTreeMulti:
 		assert filtration is None or len(filtration) % num_parameters == 0
 		if filtration is None:	
 			filtration = np.array([-np.inf]*num_parameters, dtype = float)
-			#self.make_filtration_non_decreasing()
-		# simplex_already_exists = not self.get_ptr().insert(simplex, <filtration_type>filtration)
-		# if simplex_already_exists:
-		# 	old_filtrations  = self.filtration(simplex)
-		# 	for f in old_filtrations:
-		# 		if np.all(f >= filtration) or np.all(f <= filtration):
-		# 			return False
-		# 	new_filtration = np.concatenate([*old_filtrations, filtration], axis = 0)
-		# 	self.assign_filtration(simplex, new_filtration)
-		# 	return True
 		return self.get_ptr().insert(simplex, <filtration_type>filtration)
 		
 	@cython.boundscheck(False)
@@ -309,16 +302,6 @@ cdef class SimplexTreeMulti:
 		cdef vector[value_type] w
 		cdef int n_parameters = self.num_parameters
 		with nogil:
-			# Without this, it we end up inserting vertic could be slow ifes in a bad order (flat_map).
-			# NaN currently does the wrong thing
-			# self.get_ptr().insert_batch_vertices(vertices, INFINITY) ## TODO
-			
-#			if k !=1: # Ensure all vertices are already insered first.
-#				for vertex in vertices:
-#					if not self.get_ptr().find_simplex([vertex]):
-#						warn("Failed. Insert all vertices first !")
-#						return
-				
 			for i in range(n):
 				for j in range(k):
 					v.push_back(vertex_array[j, i])
@@ -328,13 +311,45 @@ cdef class SimplexTreeMulti:
 				v.clear()
 				w.clear()
 		return self
-	# @staticmethod
-	# cdef pair[simplex_type,vector[double]] _pair_simplex_filtration_to_python(pair[simplex_type,Finitely_critical_multi_filtration]& truc):
-	# 	cdef pair[simplex_type,vector[double]] out
-	# 	with nogil:
-	# 		out.first.swap(truc.first) 
-	# 		out.second.swap(truc.second.get_vector())
-	# 	return out
+
+
+	@cython.boundscheck(False)
+	@cython.wraparound(False)
+	def assign_batch_filtration(self, some_int[:,:] vertex_array, some_float[:,:]  filtrations, bool propagate=True):
+		"""Assign k-simplices given by a sparse array in a format similar
+		to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
+		The n-th simplex has vertices `vertex_array[0,n]`, ...,
+		`vertex_array[k,n]` and filtration value `filtrations[n,num_parameters]`.
+		/!\ Only compatible with 1-critical filtrations. If a simplex is repeated, 
+		only one filtration value will be taken into account.
+
+		:param vertex_array: the k-simplices to assign.
+		:type vertex_array: numpy.array of shape (k+1,n)
+		:param filtrations: the filtration values.
+		:type filtrations: numpy.array of shape (n,num_parameters)
+		"""
+		cdef Py_ssize_t k = vertex_array.shape[0]
+		cdef Py_ssize_t n = vertex_array.shape[1]
+		assert filtrations.shape[0] == n, 'inconsistent sizes for vertex_array and filtrations'
+		assert filtrations.shape[1] == self.num_parameters, "wrong number of parameters"
+		cdef Py_ssize_t i
+		cdef Py_ssize_t j
+		cdef vector[int] v
+		cdef vector[value_type] w
+		cdef int n_parameters = self.num_parameters
+		with nogil:
+			for i in range(n):
+				for j in range(k):
+					v.push_back(vertex_array[j, i])
+				for j in range(n_parameters):
+					w.push_back(filtrations[i,j])
+				self.get_ptr().assign_simplex_filtration(v, w)
+				v.clear()
+				w.clear()
+		if propagate: self.make_filtration_non_decreasing()
+		return self
+
+
 	def get_simplices(self):
 		"""This function returns a generator with simplices and their given
 		filtration values.
@@ -540,6 +555,8 @@ cdef class SimplexTreeMulti:
 		"""
 		self.get_ptr().reset_filtration(filtration, min_dim)
 
+	
+
 	# def extend_filtration(self):
 	#     """ Extend filtration for computing extended persistence. This function only uses the filtration values at the
 	#     0-dimensional simplices, and computes the extended persistence diagram induced by the lower-star filtration
@@ -595,27 +612,28 @@ cdef class SimplexTreeMulti:
 	#     self.pcohptr.compute_persistence(homology_coeff_field, -1.)
 	#     return self.pcohptr.compute_extended_persistence_subdiagrams(min_persistence)
 
-	def expansion_with_blocker(self, max_dim, blocker_func):
-		"""Expands the Simplex_tree containing only a graph. Simplices corresponding to cliques in the graph are added
-		incrementally, faces before cofaces, unless the simplex has dimension larger than `max_dim` or `blocker_func`
-		returns `True` for this simplex.
+	# TODO : cython3
+	# def expansion_with_blocker(self, max_dim, blocker_func):
+	# 	"""Expands the Simplex_tree containing only a graph. Simplices corresponding to cliques in the graph are added
+	# 	incrementally, faces before cofaces, unless the simplex has dimension larger than `max_dim` or `blocker_func`
+	# 	returns `True` for this simplex.
 
-		The function identifies a candidate simplex whose faces are all already in the complex, inserts it with a
-		filtration value corresponding to the maximum of the filtration values of the faces, then calls `blocker_func`
-		with this new simplex (represented as a list of int). If `blocker_func` returns `True`, the simplex is removed,
-		otherwise it is kept. The algorithm then proceeds with the next candidate.
+	# 	The function identifies a candidate simplex whose faces are all already in the complex, inserts it with a
+	# 	filtration value corresponding to the maximum of the filtration values of the faces, then calls `blocker_func`
+	# 	with this new simplex (represented as a list of int). If `blocker_func` returns `True`, the simplex is removed,
+	# 	otherwise it is kept. The algorithm then proceeds with the next candidate.
 
-		.. warning::
-			Several candidates of the same dimension may be inserted simultaneously before calling `blocker_func`, so
-			if you examine the complex in `blocker_func`, you may hit a few simplices of the same dimension that have
-			not been vetted by `blocker_func` yet, or have already been rejected but not yet removed.
+	# 	.. warning::
+	# 		Several candidates of the same dimension may be inserted simultaneously before calling `blocker_func`, so
+	# 		if you examine the complex in `blocker_func`, you may hit a few simplices of the same dimension that have
+	# 		not been vetted by `blocker_func` yet, or have already been rejected but not yet removed.
 
-		:param max_dim: Expansion maximal dimension value.
-		:type max_dim: int
-		:param blocker_func: Blocker oracle.
-		:type blocker_func: Callable[[List[int]], bool]
-		"""
-		self.get_ptr().expansion_with_blockers_callback(max_dim, callback, <void*>blocker_func)
+	# 	:param max_dim: Expansion maximal dimension value.
+	# 	:type max_dim: int
+	# 	:param blocker_func: Blocker oracle.
+	# 	:type blocker_func: Callable[[List[int]], bool]
+	# 	"""
+	# 	self.get_ptr().expansion_with_blockers_callback(max_dim, callback, <void*>blocker_func)
 
 	# def persistence(self, homology_coeff_field=11, min_persistence=0, persistence_dim_max = False):
 	#     """This function computes and returns the persistence of the simplicial complex.
@@ -953,19 +971,21 @@ cdef class SimplexTreeMulti:
 		if grid_strategy == "quantile":
 			filtrations_values = np.concatenate(self._get_filtration_values(degrees, inf_to_nan=True), axis=1)
 			filtration_grid = [
-				np.nanquantile(f, np.linspace(0,1,num=res))
+				np.nanquantile(f, np.linspace(0,1,num=res), method='closest_observation')
 				for f, res in zip(filtrations_values, resolution) 
 			]
 			return filtration_grid
 		
 		if grid_strategy == "exact":
 			filtrations_values = np.concatenate(self._get_filtration_values(degrees, inf_to_nan=True), axis=1)
+			# removes duplicate + sort (nan at the end)
 			filtrations_values = [np.unique(filtration) for filtration in filtrations_values]
-			filtrations_values = [filtration[filtration != np.nan] for filtration in filtrations_values]
+			# removes nan
+			filtrations_values = [filtration[:-1] if np.isnan(filtration[-1]) else filtration for filtration in filtrations_values]
 			
 			# computes the quantiles to drop
 			if q != 0:
-				boxes = np.asarray([np.nanquantile(filtration, [q, 1-q], axis=1) for filtration in filtrations_values],dtype=float)
+				boxes = np.asarray([np.nanquantile(filtration, [q, 1-q], axis=1, method='closest_observation') for filtration in filtrations_values],dtype=float)
 				min_filtration, max_filtration = np.nanmin(boxes, axis=(0,1)), np.nanmax(boxes, axis=(0,1)) # box, birth/death, filtration
 				filtrations_values = [
 					filtration[(m<filtration) * (filtration <M)] 
@@ -1146,7 +1166,7 @@ def _collapse_edge_list(edges, num:int=0, full:bool=False, strong:bool=False, pr
 
 
 
-def _simplextree_multify(simplextree:SimplexTree, num_parameters:int=2)->SimplexTreeMulti:
+def _simplextree_multify(simplextree:SimplexTree, num_parameters:int=2, default_values=[])->SimplexTreeMulti:
 	"""Converts a gudhi simplextree to a multi simplextree.
 	Parameters
 	----------
@@ -1162,6 +1182,7 @@ def _simplextree_multify(simplextree:SimplexTree, num_parameters:int=2)->Simplex
 	cdef int c_num_parameters = num_parameters
 	cdef intptr_t old_ptr = simplextree.thisptr
 	cdef intptr_t new_ptr = st.thisptr
+	cdef vector[value_type] c_default_values=default_values
 	with nogil:
-		multify(old_ptr, new_ptr, c_num_parameters)
+		multify(old_ptr, new_ptr, c_num_parameters, c_default_values)
 	return st

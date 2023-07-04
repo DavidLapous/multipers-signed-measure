@@ -635,7 +635,7 @@ def from_dump(dump)->PyModule:
 
 from shapely.geometry import box as _rectangle_box
 from shapely.geometry import Polygon as _Polygon
-from shapely.ops import unary_union
+from shapely import union_all
 from matplotlib.patches import Rectangle as RectanglePatch
 import numpy as np
 from matplotlib.cm import get_cmap
@@ -684,7 +684,7 @@ def plot2d(corners, box = [],*,dimension=-1, separated=False, min_persistence = 
 				fig,ax= plt.subplots()
 				ax.set(xlim=[box[0][0],box[1][0]],ylim=[box[0][1],box[1][1]])
 			if shapely:
-				summand_shape = unary_union(list_of_rect)
+				summand_shape = union_all(list_of_rect)
 				if type(summand_shape) is _Polygon:
 					xs,ys=summand_shape.exterior.xy
 					ax.fill(xs,ys,alpha=alpha, fc=cmap(i/n_summands), ec='None')

@@ -33,15 +33,15 @@ ctypedef vector[int] simplex_type
 
 cdef extern from "multi_filtrations/finitely_critical_filtrations.h" namespace "Gudhi::multi_filtrations":
 	cdef cppclass Finitely_critical_multi_filtration "Gudhi::multi_filtrations::Finitely_critical_multi_filtration<Gudhi::Simplex_tree_options_multidimensional_filtration::value_type>":
-		Finitely_critical_multi_filtration() nogil except +
-		Finitely_critical_multi_filtration(vector[value_type]) except +
+		Finitely_critical_multi_filtration()  except + nogil
+		Finitely_critical_multi_filtration(filtration_type) except +
 		Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&) except +
-		filtration_type& get_vector() nogil const 
+		filtration_type get_vector() nogil const 
 		int size() nogil
 		@staticmethod
-		multifiltration& to_python(vector[Finitely_critical_multi_filtration]&) nogil const
+		multifiltration& to_python(vector[Finitely_critical_multi_filtration]&) nogil const 
 		@staticmethod
-		vector[Finitely_critical_multi_filtration]& from_python(multifiltration&) nogil const
+		vector[Finitely_critical_multi_filtration]& from_python(multifiltration&) nogil const 
 		filtration_type __filtration_type__(self):
 			return self.get_vector()
 
@@ -60,14 +60,14 @@ cdef extern from "multi_filtrations/box.h" namespace "Gudhi::mma":
 
 cdef extern from "multi_filtrations/line.h" namespace "Gudhi::mma":
 	cdef cppclass Line[value_type]:
-		Line()  nogil except +
-		Line(point_type&) nogil  except +
-		Line(point_type&, point_type&) nogil  except +
+		Line()   except + nogil
+		Line(point_type&)   except + nogil
+		Line(point_type&, point_type&)   except + nogil
 
 cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::mma":
 	cdef cppclass Summand:
 		Summand() except +
-		Summand(vector[Finitely_critical_multi_filtration]&, vector[Finitely_critical_multi_filtration]&, int) nogil except +
+		Summand(vector[Finitely_critical_multi_filtration]&, vector[Finitely_critical_multi_filtration]&, int)  except + nogil
 		value_type get_interleaving() nogil
 		value_type get_local_weight(const corner_type&, const value_type)  nogil
 		void add_bar(value_type, value_type, const corner_type&, corner_type&, corner_type&, const bool, const interval&) nogil
@@ -76,7 +76,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 		cmultifiltration_type& get_death_list() nogil
 		void complete_birth(const value_type)  nogil
 		void complete_death(const value_type)  nogil
-		dimension_type get_dimension() nogil const
+		dimension_type get_dimension()  nogil const 
 		void set_dimension(int) nogil
 		bool contains(const corner_type&)  nogil const
 
@@ -85,17 +85,17 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 
 cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::mma":
 	cdef cppclass MultiDiagram_point:
-		MultiDiagram_point()  nogil except +
-		MultiDiagram_point(dimension_type , corner_type , corner_type ) nogil  except +
-		filtration_type get_birth()  nogil const
-		filtration_type get_death()  nogil const
-		dimension_type get_dimension()  nogil const
+		MultiDiagram_point()   except + nogil
+		MultiDiagram_point(dimension_type , corner_type , corner_type )   except + nogil
+		filtration_type get_birth()    nogil const
+		filtration_type get_death()  nogil const 
+		dimension_type get_dimension() nogil  const 
 
 cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::mma":
 	cdef cppclass MultiDiagram:
-		MultiDiagram()  nogil except +
+		MultiDiagram()   except + nogil
 		barcode get_points(const dimension_type) const  
-		multipers_barcode to_multipers(const dimension_type) nogil const  
+		multipers_barcode to_multipers(const dimension_type) nogil const   
 		vector[MultiDiagram_point].const_iterator begin()  
 		vector[MultiDiagram_point].const_iterator end()  
 		unsigned int size() const  
@@ -103,10 +103,10 @@ cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gu
 
 cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::mma":
 	cdef cppclass MultiDiagrams:
-		MultiDiagrams() nogil except +
-		vector[vector[vector[value_type]]] to_multipers() nogil const   
+		MultiDiagrams()  except + nogil
+		vector[vector[vector[value_type]]] to_multipers() nogil const    
 		MultiDiagram& at(const unsigned int)  nogil
-		unsigned int size() nogil const 
+		unsigned int size() nogil const  
 		vector[MultiDiagram].const_iterator begin()
 		vector[MultiDiagram].const_iterator end()
 		plot_interface_type _for_python_plot(dimension_type, value_type)  nogil
@@ -114,7 +114,7 @@ cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gu
 
 cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::mma":
 	cdef cppclass Module:
-		Module() nogil except +
+		Module()  except + nogil
 		void resize(unsigned int)  nogil
 		Summand& at(unsigned int)  nogil
 		vector[Summand].iterator begin()
