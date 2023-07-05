@@ -175,10 +175,20 @@ def plot_EF_from_distances(alphas = [0.01, 0.02, 0.05, 0.1], EF = EF_from_distan
 	return y
 
 
+def lines2bonds(mol:mda.Universe, bond_types = ['ar','am',3,2,1,0], molecule_format=None):
+	extension = mol.filename.split('.')[-1].lower() if molecule_format is None else molecule_format
+	match extension:
+		case 'mol2':
+			out = lines2bonds_MOL2(mol)['bond_type']
+		case 'pdb':
+			out = lines2bonds_PDB(mol)
+		case _:
+			raise Exception('Invalid, or not supported molecule format.')
+	return LabelEncoder().fit(bond_types).transform(out)
+	
 
-
-def lines2bonds(path:str):
-	_lines = open(path, "r").readlines()
+def lines2bonds_MOL2(mol:mda.Universe):
+	_lines = open(mol.filename, "r").readlines()
 	out = []
 	index = 0
 	while index < len(_lines) and  _lines[index].strip() != "@<TRIPOS>BOND":
@@ -195,94 +205,145 @@ def lines2bonds(path:str):
 		index +=1
 	out = pd.DataFrame(out, columns=["bond_id","atom1", "atom2", "bond_type"])
 	out.set_index(["bond_id"],inplace=True)
-	return out
-def _mol2st(path:str|mda.Universe, bond_length:bool = False, charge:bool=False, atomic_mass:bool=False, bond_type=False, **kwargs):
-	molecule = path if isinstance(path, mda.Universe) else mda.Universe(path, format="MOL2") 
-	# if isinstance(bonds_df, list):	
-	# 	if len(bonds_df) > 1:	warn("Multiple molecule found in the same data ! Taking the first only.")
-	# 	molecule_df = molecule_df[0]
-	# 	bonds_df = bonds_df[0]
-	num_filtrations = bond_length + charge + atomic_mass + bond_type
+	return  out
+
+
+def lines2bonds_PDB(mol:mda.Universe):
+	raise Exception('Not yet implemented.')
+	return  
+
+def _mol2graphst(path:str|mda.Universe, filtrations:Iterable[str], molecule_format=None):
+	molecule = path if isinstance(path, mda.Universe) else mda.Universe(path) 
+
+	num_filtrations = len(filtrations)
 	nodes = molecule.atoms.indices.reshape(1,-1)
 	edges = molecule.bonds.dump_contents().T
 	num_vertices = nodes.shape[1]
-	num_edges =edges.shape[1]
+	num_edges = edges.shape[1]
 	
 	st = mp.SimplexTreeMulti(num_parameters = num_filtrations)
 	
 	## Edges filtration
 	# edges = np.array(bonds_df[["atom1", "atom2"]]).T
 	edges_filtration = np.zeros((num_edges, num_filtrations), dtype=np.float32) - np.inf
-	if bond_length:
-		bond_lengths = molecule.bonds.bonds()
-		edges_filtration[:,0] = bond_lengths
-	if bond_type:
-		if isinstance(path, mda.Universe):
-			TypeError("Expected path as input to compute bounds type. MDA doesn't handle it.")
-		bond_types = LabelEncoder().fit([0,1,2,3,"am","ar"]).transform(lines2bonds(path=path)["bond_type"])
-		edges_filtration[:,int(bond_length)] = bond_types
-
+	for i, filtration in enumerate(filtrations):
+		match filtration:
+			case "bond_length":
+				bond_lengths = molecule.bonds.bonds()
+				edges_filtration[:,i] = bond_lengths
+			case "bond_type":
+				bond_types = lines2bonds(mol=molecule, molecule_format=molecule_format)
+				edges_filtration[:,i] = bond_types
+			case _:
+				pass
+	
 	## Nodes filtration
 	nodes_filtrations = np.zeros((num_vertices,num_filtrations), dtype=np.float32) + np.min(edges_filtration, axis=0) # better than - np.inf
 	st.insert_batch(nodes, nodes_filtrations)
 
 	st.insert_batch(edges, edges_filtration)
-	if charge:
-		charges = molecule.atoms.charges
-		st.fill_lowerstar(charges, parameter=int(bond_length + bond_type))
-		# raise Exception("TODO")
-	if atomic_mass:
-		masses = molecule.atoms.masses
-		null_indices = masses == 0
-		if np.any(null_indices): # guess if necessary
-			masses[null_indices] = guess_masses(molecule.atoms.types)[null_indices]
-		st.fill_lowerstar(-masses, parameter=int(bond_length+bond_type+charge))
-	st.make_filtration_non_decreasing()
+	for i, filtration in enumerate(filtrations):
+		match filtration:
+			case "charge":
+				charges = molecule.atoms.charges
+				st.fill_lowerstar(charges, parameter=i)
+			case "atomic_mass":
+				masses = molecule.atoms.masses
+				null_indices = masses == 0
+				if np.any(null_indices): # guess if necessary
+					masses[null_indices] = guess_masses(molecule.atoms.types)[null_indices]
+				st.fill_lowerstar(-masses, parameter=i)
+			case _:
+				pass
+	st.make_filtration_non_decreasing() # Necessary ?
 	return st
+
+
+def _mol2ripsst(path:str, filtrations:Iterable[str], threshold=np.inf, bond_types:list=['ar','am',3,2,1,0]):
+	import gudhi as gd
+	assert 'bond_length' == filtrations[0], "Bond length has to be first for rips."
+	molecule = path if isinstance(path, mda.Universe) else mda.Universe(path) 
+	num_parameters = len(filtrations)
+	st_rips = gd.RipsComplex(points = molecule.atoms.positions, max_edge_length=threshold).create_simplex_tree()
+	st = mp.SimplexTreeMulti(st_rips, num_parameters=num_parameters, 
+			  default_values = [bond_types.index(0) if f == "bond_type" else -np.inf for f in filtrations[1:]] # the 0 index is the label of 'no bond' in bond_types
+	)
+
+	## Edges filtration
+	mol_bonds = molecule.bonds.indices.T
+	edges_filtration = np.zeros((mol_bonds.shape[1], num_parameters), dtype=np.float32) - np.inf
+	for i, filtration in enumerate(filtrations):
+		match filtration:
+			case "bond_type":
+				edges_filtration[:,i] = lines2bonds(mol=molecule, bond_types=bond_types)
+			case "atomic_mass":
+				continue
+			case "charge":
+				continue
+			case 'bond_length':
+				edges_filtration[:,i] = [st_rips.filtration(s) for s in mol_bonds.T]
+			case _:
+				raise Exception(f"Invalid filtration {filtration}. Available ones : bond_type, atomic_mass, charge, bond_length.")
+	st.assign_batch_filtration(mol_bonds, edges_filtration, propagate=False)
+	min_filtration = edges_filtration.min(axis=0)
+	st.assign_batch_filtration(np.asarray([list(range(st.num_vertices()))], dtype=int), np.asarray([min_filtration]*st.num_vertices(), dtype=np.float32), propagate=False)
+	## Nodes filtration
+	for i, filtration in enumerate(filtrations):
+		match filtration:
+			case "charge":
+				charges = molecule.atoms.charges
+				st.fill_lowerstar(charges, parameter=i)
+			case "atomic_mass":
+				masses = molecule.atoms.masses
+				null_indices = masses == 0
+				if np.any(null_indices): # guess if necessary
+					masses[null_indices] = guess_masses(molecule.atoms.types)[null_indices]
+				# print(masses)
+				st.fill_lowerstar(-masses, parameter=i)
+			case _:
+				pass
+	st.make_filtration_non_decreasing() # Necessary ?
+	return st
+
 
 class Molecule2SimplexTree(BaseEstimator, TransformerMixin):
 	"""
-	Transforms a list of mol2 files into a list of mulitparameter simplextrees
-	Input:
+	Transforms a list of MDA-compatible files into a list of mulitparameter simplextrees
 	
+	Input
+	-----
 	 X: Iterable[path_to_files:str]
-	Output:
-
+	
+	Output
+	------
 	 Iterable[multipers.SimplexTreeMulti]
+	
+	Parameters
+	----------
+	 - filtrations : list of filtration names. Available ones : 'charge', 'atomic_mass', 'bond_length', 'bond_type'. Others are ignored.
+	 - graph : bool. If true, will use the graph given by the molecule, otherwise, a Rips Complex Based on the distance. '
+	 In that case bond_length is ignored (it's the 1rst parameter).
 	"""
-	def __init__(self, atom_columns:Iterable[str]|None=None, 
-			atom_num_columns:int=9, max_dimension:int|None=None, delayed:bool=False, 
-			progress:bool=False, 
-			bond_length_filtration:bool=False,
-			bond_type_filtration:bool=False,
-			charge_filtration:bool=False, 
-			atomic_mass_filtration:bool=False, 
+	def __init__(self, 
+			delayed:bool=False, 
+			filtrations:Iterable[str]=[],
+			graph:bool=True,
 			n_jobs:int=1) -> None:
 		super().__init__()
-		self.max_dimension=max_dimension
 		self.delayed=delayed
-		self.progress=progress
-		self.bond_length_filtration = bond_length_filtration
-		self.charge_filtration = charge_filtration
-		self.atomic_mass_filtration = atomic_mass_filtration
-		self.bond_type_filtration = bond_type_filtration
 		self.n_jobs = n_jobs
-		self.atom_columns = atom_columns
-		self.atom_num_columns = atom_num_columns
-		self.num_parameters = self.charge_filtration + self.bond_length_filtration + self.bond_type_filtration + self.atomic_mass_filtration
+		self.filtrations=filtrations
+		self.graph=graph
+		self._molecule_format=None
 		return
 	def fit(self, X:Iterable[str], y=None):
 		if len(X) == 0:	return self
+		test_mol = mda.Universe(X[0])
+		self._molecule_format = test_mol.filename.split('.')[-1].lower()
 		return self
 	def transform(self,X:Iterable[str]):
-		def to_simplex_tree(path_to_mol2_file:str):
-			simplex_tree = _mol2st(path=path_to_mol2_file, 
-				bond_type=self.bond_type_filtration,
-				bond_length=self.bond_length_filtration,
-				charge=self.charge_filtration,
-				atomic_mass=self.atomic_mass_filtration,
-			)
-			return simplex_tree
+		_to_simplextree = _mol2graphst if self.graph else _mol2ripsst
+		to_simplex_tree = lambda path_to_mol2_file : _to_simplextree(path=path_to_mol2_file, filtrations=self.filtrations)
 		if self.delayed:
 			return [delayed(to_simplex_tree)(path) for path in X]
 		return Parallel(n_jobs=self.n_jobs, prefer="threads")(delayed(to_simplex_tree)(path) for path in X)

@@ -1,4 +1,3 @@
-
 import numpy as np
 import gudhi as gd
 import multipers as mp
@@ -151,8 +150,9 @@ class RipsDensity2SimplexTree(BaseEstimator, TransformerMixin):
 		if isinstance(self.num_collapses, int):
 			st.collapse_edges(num=self.num_collapses)
 			# if self.progress: print("Num simplices after collapse :", st.num_simplices())
+			if self.verbose: print(", after collapse :", st.num_simplices(), end="")
 		elif self.num_collapses == "full":
-			if self.verbose: print("Num simplices before collapse :", st.num_simplices(), end="")
+			# if self.verbose: print("Num simplices before collapse :", st.num_simplices(), end="")
 			st.collapse_edges(full=True)
 			if self.verbose: print(", after collapse :", st.num_simplices(), end="")
 		if self.expand_dim > 1:
@@ -1000,6 +1000,8 @@ class SignedMeasure2Convolution(BaseEstimator,TransformerMixin):
 	
 	def _plot_imgs(self, imgs:Iterable[np.ndarray]):
 		extent = [self.filtration_grid[0][0], self.filtration_grid[0][-1], self.filtration_grid[1][0], self.filtration_grid[1][-1]]
+		a,b,c,d = extent
+		aspect =  (b-a) / (d-c) 
 		num_degrees = imgs[0].shape[0]
 		num_imgs = len(imgs)
 		fig, axes = plt.subplots(nrows=num_degrees,ncols=num_imgs)
@@ -1008,7 +1010,7 @@ class SignedMeasure2Convolution(BaseEstimator,TransformerMixin):
 		for j, img in enumerate(imgs):
 			for i in range(num_degrees):
 				plt.sca(axes[i,j])
-				plt.imshow(img.T, origin="lower", extent=extent, cmap="Spectral")
+				plt.imshow(img.T, origin="lower", extent=extent, cmap="Spectral", aspect=aspect)
 		plt.show()
 	def transform(self,X):
 		if self._is_input_sparse is None:	raise Exception("Fit first")

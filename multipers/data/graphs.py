@@ -52,7 +52,6 @@ def get_from_file_old(dataset:str, label="lb"):
 
 def get_from_file(dataset:str):
 	from os.path import expanduser, exists
-	DATASET_PATH=expanduser("~/Datasets/")
 	path = DATASET_PATH + f"{dataset}/{dataset[7:]}."
 	try:
 		graphs_ids = np.loadtxt(path+"graph_idx")
@@ -242,11 +241,12 @@ class Graph2SimplexTree(BaseEstimator,TransformerMixin):
 	- "ricciCurvature" the ricci curvature
 	- "fiedler" the square of the fiedler vector
 	"""
-	def __init__(self, filtrations:Iterable[str]=["ricciCurvature", "cc", "degree"], delayed=False, num_collapses=100):
+	def __init__(self, filtrations:Iterable[str]=["ricciCurvature", "cc", "degree"], delayed=False, num_collapses=100, progress:bool=False):
 		super().__init__()
 		self.filtrations=filtrations # filtration to search in graph
 		self.delayed = delayed # reverses the filtration #TODO
 		self.num_collapses=num_collapses
+		self.progress=progress
 	def fit(self, X, y=None):
 		return self
 	def transform(self,X:list[nx.Graph]):
@@ -261,4 +261,4 @@ class Graph2SimplexTree(BaseEstimator,TransformerMixin):
 			if st.num_parameters == 2:	st.collapse_edges(num=self.num_collapses) # TODO : wait for a filtration domination update
 			st.make_filtration_non_decreasing() ## Ricci is not safe ...
 			return st
-		return [delayed(todo)(graph) for graph in X] if self.delayed else Parallel(n_jobs=-1, prefer="threads")(delayed(todo)(graph) for graph in tqdm(X, desc="Computing simplextrees from graphs"))
+		return [delayed(todo)(graph) for graph in X] if self.delayed else Parallel(n_jobs=-1, prefer="threads")(delayed(todo)(graph) for graph in tqdm(X, desc="Computing simplextrees from graphs", disable=not self.progress))
