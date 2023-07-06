@@ -30,6 +30,8 @@ public:
 		return static_cast<std::vector<T>>(*this);
 	}
 
+
+
 	//TODO : multicritical -> iterator over filtrations
 
 	// LESS THAN OPERATORS
@@ -98,6 +100,7 @@ public:
 
 
 
+
 	friend Finitely_critical_multi_filtration& operator-=(Finitely_critical_multi_filtration &result, const Finitely_critical_multi_filtration &to_substract){
 		std::transform(result.begin(), result.end(), to_substract.begin(),result.begin(), std::minus<T>());
 		return result;
@@ -142,6 +145,14 @@ public:
 		);
 	}
 
+	T linear_projection(const std::vector<T>& x){
+		T projection=0;
+		unsigned int size = std::min(x.size(), this->size());
+		for (auto i =0u; i<size;i++)
+			projection += x[i]*this->at(i);
+		return projection;
+	}
+
 	// easy debug 
     friend std::ostream& operator<<(std::ostream& stream, const Finitely_critical_multi_filtration<T>& truc){
         stream << "[";
@@ -152,6 +163,8 @@ public:
         stream << "]";
         return stream;
     }
+
+
 
 
 };

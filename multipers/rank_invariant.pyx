@@ -31,8 +31,8 @@ cdef extern from "multi_parameter_rank_invariant/function_rips.h" namespace "Gud
 
 from multipers.simplex_tree_multi import SimplexTreeMulti # Typing hack
 
-cimport numpy as cnp
-cnp.import_array()
+# cimport numpy as cnp
+# cnp.import_array()
 import numpy as np
 
 # # TODO : make a st python flag for coordinate_st, with grid resolution.

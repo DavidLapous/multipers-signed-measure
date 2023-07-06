@@ -97,6 +97,28 @@ void flatten(const uintptr_t splxptr, const uintptr_t newsplxptr, const int dime
 	flatten(st, st_multi, dimension);
 }
 
+void linear_projection(Simplex_tree<options_std> &st, Simplex_tree<options_multi> &st_multi, const std::vector<typename options_multi::value_type>& linear_form){
+	auto sh = st.complex_simplex_range().begin();
+	auto sh_multi = st_multi.complex_simplex_range().begin();
+	auto end = st.complex_simplex_range().end();
+	typename options_multi::Filtration_value multi_filtration;
+	for (; sh != end; ++sh, ++sh_multi){
+		multi_filtration = st_multi.filtration(*sh_multi);
+		auto projected_filtration = multi_filtration.linear_projection(linear_form);
+		st.assign_filtration(*sh, projected_filtration);
+	}
+}
+// For python interface. Do not use.
+template<typename ... Args>
+void linear_projection(const uintptr_t ptr, const uintptr_t ptr_multi, Args...args){
+	auto &st = get_simplextree_from_pointer<options_std>(ptr);
+	auto &st_multi = get_simplextree_from_pointer<options_multi>(ptr_multi);
+	linear_projection(st, st_multi, args...);
+}
+
+
+
+
 template<class _options_std, class _options_multi>
 void flatten_diag(Simplex_tree<_options_std> &st, Simplex_tree<_options_multi> &st_multi, const std::vector<typename _options_multi::value_type> basepoint, int dimension){
 	Gudhi::multi_filtrations::Line<typename _options_multi::value_type> l(basepoint);
