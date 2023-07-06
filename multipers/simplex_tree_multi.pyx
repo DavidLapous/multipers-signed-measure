@@ -352,7 +352,7 @@ cdef class SimplexTreeMulti:
 		return self
 
 
-	def get_simplices(self)->Iterable[tuple[Iterable[int],Iterable[float]]]:
+	def get_simplices(self):
 		"""This function returns a generator with simplices and their given
 		filtration values.
 
@@ -374,7 +374,7 @@ cdef class SimplexTreeMulti:
 			# yield SimplexTreeMulti._pair_simplex_filtration_to_python(out)
 			preincrement(it)
 
-	def get_filtration(self)->Iterable[tuple[Iterable[int],Iterable[float]]]:
+	def get_filtration(self):
 		"""This function returns a generator with simplices and their given
 		filtration values sorted by increasing filtration values.
 
@@ -388,7 +388,7 @@ cdef class SimplexTreeMulti:
 			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
 			preincrement(it)
 
-	def get_skeleton(self, dimension)->Iterable[tuple[Iterable[int],Iterable[float]]]:
+	def get_skeleton(self, dimension):
 		"""This function returns a generator with the (simplices of the) skeleton of a maximum given dimension.
 
 		:param dimension: The skeleton dimension value.
@@ -403,7 +403,7 @@ cdef class SimplexTreeMulti:
 			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
 			preincrement(it)
 
-	def get_star(self, simplex)->Iterable[tuple[Iterable[int],Iterable[float]]]:
+	def get_star(self, simplex):
 		"""This function returns the star of a given N-simplex.
 
 		:param simplex: The N-simplex, represented by a list of vertex.
@@ -424,7 +424,7 @@ cdef class SimplexTreeMulti:
 			ct.append((v, filtered_simplex.second))
 		return ct
 
-	def get_cofaces(self, simplex, codimension)->Iterable[tuple[Iterable[int],Iterable[float]]]:
+	def get_cofaces(self, simplex, codimension):
 		"""This function returns the cofaces of a given N-simplex with a
 		given codimension.
 
@@ -449,7 +449,7 @@ cdef class SimplexTreeMulti:
 			ct.append((v, filtered_simplex.second))
 		return ct
 
-	def get_boundaries(self, simplex)->Iterable[tuple[Iterable[int],Iterable[float]]]:
+	def get_boundaries(self, simplex):
 		"""This function returns a generator with the boundaries of a given N-simplex.
 		If you do not need the filtration values, the boundary can also be obtained as
 		:code:`itertools.combinations(simplex,len(simplex)-1)`.
