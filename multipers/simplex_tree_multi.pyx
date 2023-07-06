@@ -695,7 +695,7 @@ cdef class SimplexTreeMulti:
 		
 		
 ## This function is only meant for the edge collapse interface.
-	def get_edge_list(self)->Iterable[tuple[tuple[int,int],tuple[float,float]]]:
+	def get_edge_list(self):
 		cdef edge_list out
 		with nogil:
 			out = self.get_ptr().get_edge_list()

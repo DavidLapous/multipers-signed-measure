@@ -361,7 +361,7 @@ class SimplexTreeMulti:
 		
 		
 ## This function is only meant for the edge collapse interface.
-	def get_edge_list(self)->Iterable[tuple[tuple[int,int],tuple[float,float]]]:
+	def get_edge_list(self):
 		...
 	
 	def collapse_edges(self, max_dimension:int=None, num:int=1, progress:bool=False, strong:bool=True, full:bool=False, ignore_warning:bool=False)->SimplexTreeMulti:
