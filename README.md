@@ -9,8 +9,14 @@ It has a few dependencies that can be installed with, e.g., conda.
 ```sh
 conda create -n python311
 conda activate python311
-conda install python=3.11 boost tbb tbb-devel numpy matplotlib gudhi scikit-learn cython sympy tqdm cycler typing shapely numba -c conda-forge
+conda install python=3.11 tbb tbb-devel numpy matplotlib gudhi cython shapely cycler tqdm -c conda-forge
 pip install filtration-domination
+```
+There are also optional dependencies, for the `multipers.ml` machine learning modules:
+```sh
+conda install scikit-learn pot pandas numba joblib scipy networkx -c conda-forge
+conda install pytorch -c pytorch
+pip install git+https://github.com/LuisScoccola/persistable.git@higher-homology
 ```
 
 ### Compile-install
@@ -18,7 +24,7 @@ The following installs the `multipers` library
 ```sh
 pip install .
 ```
-It has been tested with python 3.11 on Linux (gcc12.2) and Macos (clang14-clang16). If the build fails (on macos) see a fix at the end of the readme. 
+It has been tested with python 3.11 on Linux (gcc12,13) and Macos (clang14,16). If the build fails (on macos) see a fix at the end of the readme. 
 
 ## How to use : tutorial notebooks
 We provide a few notebooks, which explains, in different scenarios, how to use our library. **Take a look at them !** They are in the tutorial folder.
