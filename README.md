@@ -14,8 +14,9 @@ pip install filtration-domination
 ```
 There are also optional dependencies, for the `multipers.ml` machine learning modules:
 ```sh
-conda install scikit-learn pot pandas numba joblib scipy networkx -c conda-forge
+conda install scikit-learn pot pandas numba joblib scipy networkx mdanalysis -c conda-forge
 conda install pytorch -c pytorch
+conda install pyg -c pyg # or pip install torch_geometric
 pip install git+https://github.com/LuisScoccola/persistable.git@higher-homology
 ```
 
