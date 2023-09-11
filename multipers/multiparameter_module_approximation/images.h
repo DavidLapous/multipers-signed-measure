@@ -20,14 +20,14 @@
 
 #include "approximation.h"
 #include "utilities.h"
-namespace Gudhi::mma::representation{
+namespace Gudhi::multiparameter::mma::representation{
 
 
-using Gudhi::mma::boundary_matrix;
-using Gudhi::mma::filtration_type;
-using Gudhi::mma::dimension_type;
-using Gudhi::mma::Module;
-using Gudhi::mma::Box;
+using Gudhi::multiparameter::mma::boundary_matrix;
+using Gudhi::multiparameter::mma::filtration_type;
+using Gudhi::multiparameter::mma::dimension_type;
+using Gudhi::multiparameter::mma::Module;
+using Gudhi::multiparameter::mma::Box;
 
 struct ImageArgs{
 private:
@@ -58,7 +58,7 @@ std::vector<std::vector<std::vector<double> > > get_2D_image_from_boundary_matri
 	Box bbox(box);
 	bbox.inflate(delta);
 	Module approximation =
-			Gudhi::mma::compute_vineyard_barcode_approximation(
+			Gudhi::multiparameter::mma::compute_vineyard_barcode_approximation(
 				boundaryMatrix,
 				filtersList,
 				precision,

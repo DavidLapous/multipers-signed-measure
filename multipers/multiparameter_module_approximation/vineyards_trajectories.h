@@ -43,9 +43,9 @@
 
 
 
-namespace Gudhi::mma {
+namespace Gudhi::multiparameter::mma {
 
-using Gudhi::multi_filtrations::Box;
+using Gudhi::multiparameter::multi_filtrations::Box;
 std::vector<std::vector<std::vector<interval_type> > > compute_vineyard_barcode(
         boundary_matrix& boundaryMatrix,
         const std::vector<filtration_type>& filtersList,
@@ -165,7 +165,7 @@ std::vector<std::vector<std::vector<interval_type>>> compute_vineyard_barcode(
         bool multithread,
         bool verbose)
 {
-    Gudhi::mma::verbose = verbose;
+    Gudhi::multiparameter::mma::verbose = verbose;
     // Checks if dimensions are compatibles
     assert(!filtersList.empty() && "A non trivial filters list is needed !");
 	assert(filtersList.size() == box.get_bottom_corner().size()
@@ -623,7 +623,7 @@ void threshold_up(point_type& point,
 				  const Box<value_type>& box,
                   const point_type& basepoint)
 {
-    Gudhi::multi_filtrations::Finitely_critical_multi_filtration point_(point);
+    Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration point_(point);
 	// if (is_smaller(point, box.get_upper_corner())) return;
     if (point_ <= box.get_upper_corner()) return;
 

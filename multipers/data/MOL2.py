@@ -286,7 +286,7 @@ def _mol2ripsst(path:str, filtrations:Iterable[str], threshold=np.inf, bond_type
 				raise Exception(f"Invalid filtration {filtration}. Available ones : bond_type, atomic_mass, charge, bond_length.")
 	st.assign_batch_filtration(mol_bonds, edges_filtration, propagate=False)
 	min_filtration = edges_filtration.min(axis=0)
-	st.assign_batch_filtration(np.asarray([list(range(st.num_vertices()))], dtype=int), np.asarray([min_filtration]*st.num_vertices(), dtype=np.float32), propagate=False)
+	st.assign_batch_filtration(np.asarray([list(range(st.num_vertices))], dtype=int), np.asarray([min_filtration]*st.num_vertices, dtype=np.float32), propagate=False)
 	## Nodes filtration
 	for i, filtration in enumerate(filtrations):
 		match filtration:

@@ -5,9 +5,9 @@
 #include <algorithm>
 #include <limits>
 
-namespace Gudhi::multi_filtrations{
+namespace Gudhi::multiparameter::multi_filtrations{
 
-template<typename T>
+template<typename T=float>
 class Finitely_critical_multi_filtration : public std::vector<T> {
 	// Class to prevent doing illegal stuff with the standard library, e.g., compare two vectors
 public:
@@ -125,9 +125,9 @@ public:
 	}
 
 	static std::vector<std::vector<T>> to_python(const std::vector<Finitely_critical_multi_filtration<T>>& to_convert){
-
 		return std::vector<std::vector<T>>(to_convert.begin(), to_convert.end());
 	}
+	
 
 	static std::vector<Finitely_critical_multi_filtration<T>> from_python(const std::vector<std::vector<T>>& to_convert){
 		return std::vector<Finitely_critical_multi_filtration<T>>(to_convert.begin(), to_convert.end());;

@@ -25,9 +25,9 @@
 #include "utilities.h"
 #include "debug.h"
 
-namespace Gudhi::mma::Combinatorics {
+namespace Gudhi::multiparameter::mma::Combinatorics {
 
-using Gudhi::mma::permutation_type;
+using Gudhi::multiparameter::mma::permutation_type;
 
 template<typename T> void compose(std::vector<T> &p, const permutation_type &q);
 unsigned int prod(const std::vector<unsigned int>& toMultiply,

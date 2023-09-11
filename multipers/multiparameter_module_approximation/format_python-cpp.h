@@ -23,11 +23,11 @@
 #include <iostream>
 #include <fstream>
 
-#include "utilities.h"
+#include "multiparameter_module_approximation/utilities.h"
 
-#include "Simplex_tree_multi.h"
+#include "gudhi/Simplex_tree_multi.h"
 
-namespace Gudhi::mma{
+namespace Gudhi::multiparameter::mma{
 
 
 // Lexical order + dimension
@@ -46,7 +46,7 @@ bool is_strictly_smaller_simplex(const boundary_type& s1, const boundary_type& s
 
 std::pair<boundary_matrix, multifiltration_type> simplextree_to_boundary_filtration(const uintptr_t splxptr)
 {
-	using option = Gudhi::Simplex_tree_options_multidimensional_filtration;
+	using option = Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration;
 	Gudhi::Simplex_tree<option> &simplexTree = *(Gudhi::Simplex_tree<option>*)(splxptr);
 
 	unsigned int numberOfSimplices = simplexTree.num_simplices();

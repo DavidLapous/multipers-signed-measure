@@ -19,7 +19,7 @@
 
 #include "utilities.h"  //type definitions
 
-namespace Gudhi::mma {
+namespace Gudhi::multiparameter::mma {
 
 template<class Column_type>
 class Vector_matrix

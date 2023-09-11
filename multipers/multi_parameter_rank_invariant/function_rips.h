@@ -2,7 +2,7 @@
 
 #include "rank_invariant.h"
 
-namespace Gudhi::rank_invariant::degree_rips{
+namespace Gudhi::multiparameter::rank_invariant::degree_rips{
 
 using Simplex_tree_std = Simplex_tree<Simplex_tree_options_full_featured>; // TODO : fast persistence (rips is contigus, ...)
 using Filtration_value = Simplex_tree_std::Filtration_value;
@@ -196,7 +196,7 @@ std::pair<std::map<value_type,unsigned int>, std::vector<value_type>> radius_to_
 
 
 // grid shape coord 1
-signed_measure degree_rips_hilbert_signed_measure(Simplex_tree_std &st, int num_degrees, int homological_degree, bool null_mass=false){
+signed_measure degree_rips_hilbert_signed_measure(interface_std &st, int num_degrees, int homological_degree, bool null_mass=false){
 	constexpr bool verbose = false;
 	signed_measure out;
 	if constexpr(verbose)
@@ -282,7 +282,7 @@ signed_measure degree_rips_hilbert_signed_measure(Simplex_tree_std &st, int num_
 
 template<typename ... Args>
 signed_measure degree_rips_hilbert_signed_measure(const intptr_t simplextree_ptr, Args...args){
-	auto &st = get_simplextree_from_pointer<Simplex_tree_options_full_featured>(simplextree_ptr);
+	auto &st = get_simplextree_from_pointer<interface_std>(simplextree_ptr);
 	return degree_rips_hilbert_signed_measure(st, args...);
 }
 

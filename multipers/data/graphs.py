@@ -114,7 +114,17 @@ def compute_ricci(graphs:list[nx.Graph], alpha=0.5, progress = 1):
 	from GraphRicciCurvature.OllivierRicci import OllivierRicci
 	def ricci(graph, alpha=alpha):
 		return OllivierRicci(graph,alpha=alpha).compute_ricci_curvature()
-	graphs = Parallel(n_jobs=1, prefer="threads")(delayed(ricci)(g) for g in tqdm(graphs, disable = not progress, desc="Computing ricci"))
+	graphs = [ricci(g) for g in tqdm(graphs, disable = not progress, desc="Computing ricci")]
+	def push_back_node(graph):
+		# for node in graph.nodes:
+			# graph.nodes[node]['ricciCurvature'] = np.min([graph[node][node2]['ricciCurvature'] for node2 in graph[node]] + [graph.nodes[node]['ricciCurvature']])
+		node_filtrations = {
+			node: -1 if len(graph[node]) == 0 else np.min([graph[node][node2]['ricciCurvature'] for node2 in graph[node]]) 
+			for node in graph.nodes
+		}
+		nx.set_node_attributes(graph,node_filtrations,"ricciCurvature")
+		return graph
+	graphs = [push_back_node(g) for g in graphs]
 	return graphs
 
 def compute_cc(graphs:list[nx.Graph], progress = 1):
@@ -147,8 +157,6 @@ def compute_fiedler(graphs:list[nx.Graph], progress = 1): # TODO : make it compa
 	def _fiedler(g):
 		connected_graphs = [nx.subgraph(g, nodes) for nodes in nx.connected_components(g)]
 		fiedler_vectors = [nx.fiedler_vector(g)**2 if g.number_of_nodes() > 2 else np.zeros(g.number_of_nodes()) for g in connected_graphs] # order of nx.fiedler_vector correspond to nx.laplacian -> g.nodes
-		# print(len(fiedler_vectors))
-		
 		fiedler_dict = {
 			node:fiedler_vector[node_index]
 			for g,fiedler_vector in zip(connected_graphs, fiedler_vectors)
@@ -195,7 +203,7 @@ def compute_geodesic(graphs:list[nx.Graph], progress=1):
 
 def compute_filtration(dataset:str, filtration:str, **kwargs):
 	if filtration == "ALL":
-		# reset_graphs(dataset) # not necessary
+		reset_graphs(dataset) # not necessary
 		graphs,labels = get_graphs(dataset, **kwargs)
 		graphs = compute_geodesic(graphs)
 		graphs = compute_cc(graphs)
@@ -241,7 +249,7 @@ class Graph2SimplexTree(BaseEstimator,TransformerMixin):
 	- "ricciCurvature" the ricci curvature
 	- "fiedler" the square of the fiedler vector
 	"""
-	def __init__(self, filtrations:Iterable[str]=["ricciCurvature", "cc", "degree"], delayed=False, num_collapses=100, progress:bool=False):
+	def __init__(self, filtrations:Iterable[str]=[], delayed=False, num_collapses=100, progress:bool=False):
 		super().__init__()
 		self.filtrations=filtrations # filtration to search in graph
 		self.delayed = delayed # reverses the filtration #TODO
@@ -259,6 +267,6 @@ class Graph2SimplexTree(BaseEstimator,TransformerMixin):
 			edges_filtrations = np.asarray([[graph[u][v][filtration] for filtration in filtrations] for u,v in graph.edges], dtype=np.float32)
 			st.insert_batch(edges,edges_filtrations)
 			if st.num_parameters == 2:	st.collapse_edges(num=self.num_collapses) # TODO : wait for a filtration domination update
-			st.make_filtration_non_decreasing() ## Ricci is not safe ...
+			# st.make_filtration_non_decreasing() ## Ricci is not safe ...
 			return st
 		return [delayed(todo)(graph) for graph in X] if self.delayed else Parallel(n_jobs=-1, prefer="threads")(delayed(todo)(graph) for graph in tqdm(X, desc="Computing simplextrees from graphs", disable=not self.progress))

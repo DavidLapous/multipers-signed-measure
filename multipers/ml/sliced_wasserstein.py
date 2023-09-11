@@ -1,7 +1,6 @@
 ## This code was written by Mathieu Carrière.
 
 import numpy as np
-import ot
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import pairwise_distances, pairwise_kernels
 from joblib import Parallel, delayed
@@ -118,6 +117,7 @@ def _wasserstein_distance_on_parts(ground_norm=1, epsilon=1.):
         num_pts = len(meas1_plus) + len(meas2_minus)
         meas_t1 = np.vstack([meas1_plus, meas2_minus])
         meas_t2 = np.vstack([meas2_plus, meas1_minus])
+        import ot
         if epsilon > 0:
             wass = ot.sinkhorn2(1/num_pts * np.ones(num_pts), 1/num_pts * np.ones(num_pts), pairwise_distances(meas_t1, meas_t2, metric='minkowski', p=ground_norm), epsilon)
             return wass[0]
@@ -197,6 +197,7 @@ def _wasserstein_distance(meas1, meas2, epsilon, ground_norm):
     approx1 = np.vstack([ np.repeat(C1[C1_plus_idxs], M1[C1_plus_idxs], axis=0), np.repeat(C2[C2_minus_idxs], -M2[C2_minus_idxs], axis=0) ])
     approx2 = np.vstack([ np.repeat(C2[C2_plus_idxs], M2[C2_plus_idxs], axis=0), np.repeat(C1[C1_minus_idxs], -M1[C1_minus_idxs], axis=0) ])
     num_pts = len(approx1)
+    import ot
     if epsilon > 0:
         wass = ot.sinkhorn2(1/num_pts * np.ones(num_pts), 1/num_pts * np.ones(num_pts), pairwise_distances(approx1, approx2, metric='minkowski', p=ground_norm), epsilon)
         return wass[0]
