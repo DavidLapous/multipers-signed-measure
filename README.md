@@ -1,31 +1,22 @@
 # Multiparameter Persistence using Signed Measures
 Scikit-style multiparameter persistent homology python library, using signed measure and their representation for machine learning. 
-
+**Note:** Next update after the release of Gudhi 3.9. 
 ## Installation
-This python library has a C++ backend which needs to be installed. 
-
-### Dependencies
-It has a few dependencies that can be installed with, e.g., conda.
-```sh
+**Dependencies** <br>
+There are a few installation dependencies that can be installed with, e.g., conda.
+```bash
 conda create -n python311
 conda activate python311
-conda install python=3.11 tbb tbb-devel numpy matplotlib gudhi cython shapely cycler tqdm -c conda-forge
+conda install python=3.11 cxx-compiler tbb tbb-devel numpy matplotlib gudhi cython shapely cycler tqdm boost-cpp setuptools pytest llvm-openmp cmake scikit-learn -c conda-forge
 pip install filtration-domination
 ```
-There are also optional dependencies, for the `multipers.ml` machine learning modules:
-```sh
-conda install scikit-learn pot pandas numba joblib scipy networkx mdanalysis -c conda-forge
-conda install pytorch -c pytorch
-conda install pyg -c pyg # or pip install torch_geometric
-pip install git+https://github.com/LuisScoccola/persistable.git@higher-homology
-```
-
-### Compile-install
-The following installs the `multipers` library
-```sh
+**Installation**<br>
+The following installs the library
+```bash
 pip install .
 ```
-It has been tested with python 3.11 on Linux (gcc12,13) and Macos (clang14,16). If the build fails (on macos) see a fix at the end of the readme. 
+It has been tested with python 3.11 on Linux (gcc12,13,14) and Macos (clang14,16).<br> 
+**If the build fails on macos** see a fix at the end of the readme. 
 
 ## How to use : tutorial notebooks
 We provide a few notebooks, which explains, in different scenarios, how to use our library. **Take a look at them !** They are in the tutorial folder.
@@ -60,18 +51,18 @@ Due to the clang compiler, one may have to disable a compilator optimization to 
 line in the `extra_compile_args` list. You should have should end up with something like the following.
 ```python
 extensions = [Extension(f"multipers.{module}",
-	sources=[f"multipers/{module}.pyx"],
-	language='c++',
-	extra_compile_args=[
-		"-Ofast",
-		"-std=c++20",
-		"-fno-aligned-new",
-		'-ltbb',
-		"-Wall",
-	],
-	extra_link_args=['-ltbb'],
-	define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
-) for module in cython_modules]
+		sources=[f"multipers/{module}.pyx"],
+		language='c++',
+		extra_compile_args=[
+			"-Ofast",
+			"-std=c++20",
+			"-fno-aligned-new", 
+			"-Wall",
+		],
+		define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
+		libraries=["tbb"]
+	) for module in cython_modules
+]
 ```
 #### Alternatives
 One may try to use the `clang` compiler provided by conda or brew. If you have a simpler alternative, please let me know ;)
