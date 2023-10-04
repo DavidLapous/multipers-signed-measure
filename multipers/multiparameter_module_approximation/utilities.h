@@ -15,15 +15,15 @@
 #include <limits>
 #include <omp.h>
 #include <algorithm>
-#include "Simplex_tree_multi.h"
+#include "gudhi/Simplex_tree_multi.h"
 
-namespace Gudhi::mma {
+namespace Gudhi::multiparameter::mma {
 
 bool verbose = false;
 
 using index = unsigned int;
-using value_type = Gudhi::Simplex_tree_options_multidimensional_filtration::value_type;
-using filtration_type = Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
+using value_type = Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration::value_type;
+using filtration_type = Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
 using multifiltration_type = std::vector<filtration_type>;
 using python_filtration_type = std::vector<value_type>;
 using python_multifiltration_type = std::vector<python_filtration_type>;
@@ -33,8 +33,8 @@ using persistence_pair = std::pair<value_type, value_type>;
 using boundary_type = std::vector<index>;
 using boundary_matrix = std::vector<boundary_type>;
 using permutation_type = std::vector<std::size_t>;
-using point_type = Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
-using corner_type = Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
+using point_type = Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
+using corner_type = Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration<value_type>;
 using corners_type = std::pair<std::vector<corner_type>, std::vector<corner_type>>;
 using python_bar = std::pair<std::vector<value_type>, std::vector<value_type>>; // This type is for python
 using multipers_barcode = std::vector<std::vector<value_type>>;
@@ -121,7 +121,7 @@ public:
         out.reserve(multiDiagram.size());
         for (const MultiDiagram_point &pt : multiDiagram){
             if (dimension == -1 || pt.get_dimension() == dimension){
-                if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && pt.get_birth()[0] != Gudhi::mma::inf )
+                if (pt.get_birth().size() > 0 && pt.get_death().size() > 0 && pt.get_birth()[0] != mma::inf )
 					out.push_back({pt.get_birth(), pt.get_death()});
             }
         }
@@ -259,7 +259,7 @@ private:
 /*#include "unordered_set_column.h"*/
 
 
-namespace Gudhi::mma {
+namespace Gudhi::multiparameter::mma {
 using Vineyard_matrix_type = RU_matrix<Set_column>;
 }   
 

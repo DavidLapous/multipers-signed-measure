@@ -17,7 +17,7 @@
 
 #include "utilities.h"
 
-namespace Gudhi::mma {
+namespace Gudhi::multiparameter::mma {
 
 class Set_column
 {

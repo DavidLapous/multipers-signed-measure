@@ -34,7 +34,7 @@
 #include <tbb/parallel_for.h>
 
 
-namespace Gudhi::mma
+namespace Gudhi::multiparameter::mma
 {
 	using Debug::Timer;
 	using multi_filtrations::Box;
@@ -92,9 +92,10 @@ namespace Gudhi::mma
 	public:
 		using module_type = std::vector<Summand>;
 		using image_type = std::vector<std::vector<value_type>>;
-		using get_pixel_value_function_type = std::function<value_type(const module_type::const_iterator, const module_type::const_iterator, value_type, value_type)>;
+		using get_2dpixel_value_function_type = std::function<value_type(const module_type::const_iterator, const module_type::const_iterator, value_type, value_type)>; 
+		using get_pixel_value_function_type = std::function<value_type(const module_type::const_iterator, const module_type::const_iterator, std::vector<value_type>&)>; 
 
-		
+
 		Module();
 		Module(Box<value_type> &box);
 
@@ -116,7 +117,7 @@ namespace Gudhi::mma
 		std::vector<image_type> get_vectorization(
 			unsigned int horizontalResolution,
 			unsigned int verticalResolution,
-			get_pixel_value_function_type get_pixel_value) const;
+			get_2dpixel_value_function_type get_pixel_value) const;
 		image_type get_vectorization_in_dimension(
 			const dimension_type dimension,
 			const value_type delta,
@@ -129,7 +130,7 @@ namespace Gudhi::mma
 			const dimension_type dimension,
 			unsigned int horizontalResolution,
 			unsigned int verticalResolution,
-			get_pixel_value_function_type get_pixel_value) const;
+			get_2dpixel_value_function_type get_pixel_value) const;
 		std::vector<value_type> get_landscape_values(
 			const std::vector<value_type>& x,
 			const dimension_type dimension
@@ -158,6 +159,32 @@ namespace Gudhi::mma
 		MultiDiagrams get_barcodes(const std::vector<Line<value_type>> &lines, const dimension_type dimension = -1, const bool threshold = false)const ;
 		MultiDiagrams get_barcodes(const std::vector<filtration_type> &basepoints, const dimension_type dimension = -1, const bool threshold = false) const ;
 		std::vector<int> euler_curve(const std::vector<filtration_type> &points) const;
+		
+		inline Box<value_type> get_bounds() const;
+		inline void rescale(const std::vector<value_type>& rescale_factors, int degree);
+		inline void translate(const std::vector<value_type>& translation, int degree);
+
+
+
+
+		std::vector<std::vector<value_type>> compute_pixels(
+			const std::vector<std::vector<value_type>>& coordinates,
+			const std::vector<int>& degrees,
+			const Box<value_type> &box = {},
+			const value_type delta = 0.1,
+			const value_type p = 1,
+			const bool normalize = true
+		);
+		std::vector<value_type> compute_pixels_of_degree(
+			const module_type::iterator start,
+			const module_type::iterator end,
+			const value_type delta,
+			const value_type p,
+			const bool normalize,
+			const Box<value_type> &box,
+			const std::vector<std::vector<value_type>>& coordinates
+		);
+
 	private:
 		module_type module_;
 		Box<value_type> box_;
@@ -175,7 +202,8 @@ namespace Gudhi::mma
 							   const module_type::const_iterator end,
 							   unsigned int horizontalResolution,
 							   unsigned int verticalResolution,
-							   get_pixel_value_function_type get_pixel_value)const;
+							   get_2dpixel_value_function_type get_pixel_value)const;
+		
 		value_type _get_pixel_value(
 			const module_type::iterator start,
 			const module_type::iterator end,
@@ -218,6 +246,54 @@ namespace Gudhi::mma
 		friend void swap(Summand &sum1, Summand &sum2);
 
 		bool contains(const filtration_type &x) const;
+
+		inline Box<value_type> get_bounds() const{
+			if (birth_corners_.size() == 0)	return Box<value_type>();
+			auto dimension = birth_corners_[0].size();
+			filtration_type m(dimension, std::numeric_limits<value_type>::infinity());
+			filtration_type M(dimension, -std::numeric_limits<value_type>::infinity());
+			for (const auto& corner : birth_corners_){
+				for(auto parameter = 0u; parameter<dimension;parameter++){
+					m[parameter] = std::min(m[parameter],corner[parameter]);
+				}
+			}
+			for (const auto& corner : death_corners_){
+				for(auto parameter = 0u; parameter<dimension;parameter++){
+					auto corner_i = corner[parameter];
+					if (corner_i != std::numeric_limits<value_type>::infinity())
+						M[parameter] = std::max(M[parameter],corner[parameter]);
+				}
+			}
+			return Box(m,M);
+		}
+		inline void rescale(const std::vector<value_type>& rescale_factors){
+			if (birth_corners_.size() == 0)	return ;
+			auto dimension = birth_corners_[0].size();
+			for (auto& corner : birth_corners_){
+				for(auto parameter = 0u; parameter<dimension;parameter++){
+					corner[parameter] *= rescale_factors.at(parameter);
+				}
+			}
+			for (auto& corner : death_corners_){
+				for(auto parameter = 0u; parameter<dimension;parameter++){
+					corner[parameter] *= rescale_factors.at(parameter);
+				}
+			}
+		}
+		inline void translate(const std::vector<value_type>& translation){
+			if (birth_corners_.size() == 0)	return ;
+			auto dimension = birth_corners_[0].size();
+			for (auto& corner : birth_corners_){
+				for(auto parameter = 0u; parameter<dimension;parameter++){
+					corner[parameter] += translation.at(parameter);
+				}
+			}
+			for (auto& corner : death_corners_){
+				for(auto parameter = 0u; parameter<dimension;parameter++){
+					corner[parameter] += translation.at(parameter);
+				}
+			}
+		}
 
 	private:
 		std::vector<filtration_type> birth_corners_;
@@ -675,6 +751,54 @@ namespace Gudhi::mma
 		}
 	}
 	
+	inline std::vector<std::vector<value_type>> Module::compute_pixels(
+			const std::vector<std::vector<value_type>>& coordinates,
+			const std::vector<int>& degrees,
+			const Box<value_type> &box,
+			const value_type delta,
+			const value_type p,
+			const bool normalize
+		) {
+			auto num_degrees = degrees.size();
+			auto num_pts = coordinates.size();
+			std::vector<std::vector<value_type>> out(num_degrees,std::vector<value_type>(num_pts));
+
+			// PRE-compute module size
+
+
+			// for (auto degree_idx = 0u; degree_idx < num_degrees; degree_idx ++){
+			// 	const auto degree = degrees[degree_idx];
+			// 	for (auto pt_idx = 0u; pt_idx < num_pts; pt_idx++){
+			// 		const auto& pt =  coordinates[pt_idx];
+			// 		for (auto )
+			// 	}
+			// }
+			module_type::iterator start;
+			module_type::iterator end = module_.begin();
+			for (auto degree_idx = 0u; degree_idx < num_degrees; degree_idx ++)
+			{
+				{ // for Timer
+					auto d = degrees[degree_idx];
+					Debug::Timer timer("Computing image of dimension " + std::to_string(d) + " ...", verbose);
+					start = end;
+					while (start != module_.end() && start->get_dimension() != d)	start++;
+					if (start == module_.end()) break;
+					end=start;
+					while (end != module_.end()   && end->get_dimension() == d)	end++;
+					out[degree_idx] = compute_pixels_of_degree( // _compute_2D_image
+						start,
+						end,
+						delta,
+						p,
+						normalize,
+						box,
+						coordinates
+					);
+				} // Timer death
+			}
+			return out;
+		}
+
 	inline typename std::vector<Module::image_type> Module::get_vectorization(
 		const value_type delta,
 		const value_type p,
@@ -712,7 +836,7 @@ namespace Gudhi::mma
 	inline std::vector<Module::image_type> Module::get_vectorization(
 		unsigned int horizontalResolution,
 		unsigned int verticalResolution,
-		get_pixel_value_function_type get_pixel_value) const
+		get_2dpixel_value_function_type get_pixel_value) const
 	{
 		dimension_type maxDim = module_.back().get_dimension();
 		std::vector<Module::image_type> image_vector(maxDim + 1);
@@ -772,7 +896,7 @@ namespace Gudhi::mma
 		const dimension_type dimension,
 		unsigned int horizontalResolution,
 		unsigned int verticalResolution,
-		get_pixel_value_function_type get_pixel_value) const
+		get_2dpixel_value_function_type get_pixel_value) const
 	{
 		Debug::Timer timer("Computing image of dimension " + std::to_string(dimension) + " ...", verbose);
 
@@ -930,8 +1054,8 @@ namespace Gudhi::mma
 		{
 			if (summand.get_dimension() == dimension)
 				list.push_back(std::make_pair(
-					Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>().to_python(summand.get_birth_list()), 
-					Gudhi::multi_filtrations::Finitely_critical_multi_filtration<value_type>().to_python(summand.get_death_list())
+					Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration<value_type>().to_python(summand.get_birth_list()), 
+					Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration<value_type>().to_python(summand.get_death_list())
 					));
 		}
 		return list;
@@ -1006,104 +1130,197 @@ namespace Gudhi::mma
 		return out;
 	}
 
+inline Box<value_type> Module::get_bounds() const{
+	dimension_type num_parameters = box_.get_bottom_corner().size();
+	filtration_type lower_bound(num_parameters, std::numeric_limits<value_type>::infinity());
+	filtration_type upper_bound(num_parameters, -std::numeric_limits<value_type>::infinity());
+	for(const auto& summand : module_){
+		const auto& summand_bounds = summand.get_bounds();
+		const auto& [m,M] = summand_bounds.get_pair();
+		for(auto parameter=0;parameter<num_parameters;parameter++){
+			lower_bound[parameter] = std::min(m[parameter],lower_bound[parameter]);
+			upper_bound[parameter] = std::min(M[parameter],upper_bound[parameter]);
+		}
+	}
+	return Box(lower_bound,upper_bound);
+}
+inline void Module::rescale(const std::vector<value_type>& rescale_factors, int degree){
+	for(auto& summand : module_){
+		if (degree == -1 or summand.get_dimension() == degree)
+			summand.rescale(rescale_factors);
+	}
+}
+inline void Module::translate(const std::vector<value_type>& translation, int degree){
+	for(auto& summand : module_){
+		if (degree == -1 or summand.get_dimension() == degree)
+			summand.translate(translation);
+	}
+}
 
+inline std::vector<value_type> Module::compute_pixels_of_degree(
+	const module_type::iterator start,
+	const module_type::iterator end,
+	const value_type delta,
+	const value_type p,
+	const bool normalize,
+	const Box<value_type> &box,
+	const std::vector<std::vector<value_type>>& coordinates)
+{
+	unsigned int num_pixels = coordinates.size();
+	std::vector<value_type> out(num_pixels);
+	value_type moduleWeight = 0;
+	{ // for Timer
+		Debug::Timer timer("Computing module weight ...", verbose);
+		for (auto it = start; it != end; it++) //  precomputes interleaving restricted to box for all summands.
+			it->get_interleaving(box);
+		if(p == 0){
+// #pragma omp parallel for reduction(+ : moduleWeight)
+			for (auto it = start; it != end; it++)
+			{
+				moduleWeight += it->get_interleaving()>0;
+			}
+		}
+		else if (p != inf)
+		{
+// #pragma omp parallel for reduction(+ : moduleWeight)
+			for (auto it = start; it != end; it++)
+			{
+				// /!\ TODO deal with inf summands (for the moment,  depends on the box ...)
+				if (it->get_interleaving() > 0 && it->get_interleaving() != inf)
+					moduleWeight += std::pow(it->get_interleaving(), p);
+			}
+		}
+		else
+		{
+// #pragma omp parallel for reduction(std::max : moduleWeight)
+			for (auto it = start; it != end; it++)
+			{
+				if (it->get_interleaving() > 0 && it->get_interleaving() != inf)
+					moduleWeight = std::max(moduleWeight, it->get_interleaving());
+			}
+		}
+	} // Timer death
+	if (verbose)
+		std::cout << "Module " << start->get_dimension() << " has weight : " << moduleWeight << "\n";
+	if (!moduleWeight)
+		return out;
 
+	if constexpr (Debug::debug)
+		if (moduleWeight < 0)
+		{
+			if constexpr (Debug::debug)
+				std::cout << "!! Negative weight !!" << std::endl;
+			// 		image.clear();
+			return {};
+		}
 
+	tbb::parallel_for(0u,num_pixels, [&](unsigned int i){
+		out[i] = _get_pixel_value(
+			start,
+			end,
+			coordinates[i],
+			delta,
+			p,
+			normalize,
+			moduleWeight);
+	});
+	return out;
+}
 
 	
-	inline void Module::_compute_2D_image(
-		Module::image_type &image,
-		const module_type::iterator start,
-		const module_type::iterator end,
-		const value_type delta,
-		const value_type p,
-		const bool normalize,
-		const Box<value_type> &box,
-		const unsigned int horizontalResolution,
-		const unsigned int verticalResolution)
-	{
-		image.resize(horizontalResolution, std::vector<value_type>(verticalResolution));
-		value_type moduleWeight = 0;
-		{ // for Timer
-			Debug::Timer timer("Computing module weight ...", verbose);
-			for (auto it = start; it != end; it++) //  precomputes interleaving restricted to box for all summands.
-				it->get_interleaving(box);
-			if(p == 0){
+inline void Module::_compute_2D_image(
+	Module::image_type &image,
+	const module_type::iterator start,
+	const module_type::iterator end,
+	const value_type delta,
+	const value_type p,
+	const bool normalize,
+	const Box<value_type> &box,
+	const unsigned int horizontalResolution,
+	const unsigned int verticalResolution)
+{
+	image.resize(horizontalResolution, std::vector<value_type>(verticalResolution));
+	value_type moduleWeight = 0;
+	{ // for Timer
+		Debug::Timer timer("Computing module weight ...", verbose);
+		for (auto it = start; it != end; it++) //  precomputes interleaving restricted to box for all summands.
+			it->get_interleaving(box);
+		if(p == 0){
 #pragma omp parallel for reduction(+ : moduleWeight)
-				for (auto it = start; it != end; it++)
-				{
-					moduleWeight += it->get_interleaving()>0;
-				}
-			}
-			else if (p != inf)
+			for (auto it = start; it != end; it++)
 			{
+				moduleWeight += it->get_interleaving()>0;
+			}
+		}
+		else if (p != inf)
+		{
 #pragma omp parallel for reduction(+ : moduleWeight)
-				for (auto it = start; it != end; it++)
-				{
-					// /!\ TODO deal with inf summands (for the moment,  depends on the box ...)
-					if (it->get_interleaving() > 0 && it->get_interleaving() != inf)
-						moduleWeight += std::pow(it->get_interleaving(), p);
-				}
-			}
-			else
+			for (auto it = start; it != end; it++)
 			{
+				// /!\ TODO deal with inf summands (for the moment,  depends on the box ...)
+				if (it->get_interleaving() > 0 && it->get_interleaving() != inf)
+					moduleWeight += std::pow(it->get_interleaving(), p);
+			}
+		}
+		else
+		{
 #pragma omp parallel for reduction(std::max : moduleWeight)
-				for (auto it = start; it != end; it++)
-				{
-					if (it->get_interleaving() > 0 && it->get_interleaving() != inf)
-						moduleWeight = std::max(moduleWeight, it->get_interleaving());
-				}
-			}
-		} // Timer death
-		if (verbose)
-			std::cout << "Module " << start->get_dimension() << " has weight : " << moduleWeight << "\n";
-		if (!moduleWeight)
-			return;
-
-		if constexpr (Debug::debug)
-			if (moduleWeight < 0)
+			for (auto it = start; it != end; it++)
 			{
-				if constexpr (Debug::debug)
-					std::cout << "!! Negative weight !!" << std::endl;
-				// 		image.clear();
-				return;
+				if (it->get_interleaving() > 0 && it->get_interleaving() != inf)
+					moduleWeight = std::max(moduleWeight, it->get_interleaving());
 			}
+		}
+	} // Timer death
+	if (verbose)
+		std::cout << "Module " << start->get_dimension() << " has weight : " << moduleWeight << "\n";
+	if (!moduleWeight)
+		return;
 
-		value_type stepX = (box.get_upper_corner()[0] - box.get_bottom_corner()[0]) / horizontalResolution;
-		value_type stepY = (box.get_upper_corner()[1] - box.get_bottom_corner()[1]) / verticalResolution;
+	if constexpr (Debug::debug)
+		if (moduleWeight < 0)
+		{
+			if constexpr (Debug::debug)
+				std::cout << "!! Negative weight !!" << std::endl;
+			// 		image.clear();
+			return;
+		}
 
-		{ // for Timer
-			Debug::Timer timer("Computing pixel values ...", verbose);
+	value_type stepX = (box.get_upper_corner()[0] - box.get_bottom_corner()[0]) / horizontalResolution;
+	value_type stepY = (box.get_upper_corner()[1] - box.get_bottom_corner()[1]) / verticalResolution;
 
-			// #pragma omp parallel for collapse(2)
-			// for (unsigned int i = 0; i < horizontalResolution; i++)
-			// {
-			// 	for (unsigned int j = 0; j < verticalResolution; j++)
-			// 	{
-			// 		image[i][j] = _get_pixel_value(
-			// 			start,
-			// 			end,
-			// 			{box.get_bottom_corner()[0] + stepX * i, box.get_bottom_corner()[1] + stepY * j},
-			// 			delta,
-			// 			p,
-			// 			normalize,
-			// 			moduleWeight);
-			// 	}
-			// }
-			tbb::parallel_for(0U, horizontalResolution, [&](unsigned int i){
-				tbb::parallel_for(0U, verticalResolution, [&](unsigned int j){
-					image[i][j] = _get_pixel_value(
-						start,
-						end,
-						{box.get_bottom_corner()[0] + stepX * i, box.get_bottom_corner()[1] + stepY * j},
-						delta,
-						p,
-						normalize,
-						moduleWeight);
-				});
+	{ // for Timer
+		Debug::Timer timer("Computing pixel values ...", verbose);
+
+		// #pragma omp parallel for collapse(2)
+		// for (unsigned int i = 0; i < horizontalResolution; i++)
+		// {
+		// 	for (unsigned int j = 0; j < verticalResolution; j++)
+		// 	{
+		// 		image[i][j] = _get_pixel_value(
+		// 			start,
+		// 			end,
+		// 			{box.get_bottom_corner()[0] + stepX * i, box.get_bottom_corner()[1] + stepY * j},
+		// 			delta,
+		// 			p,
+		// 			normalize,
+		// 			moduleWeight);
+		// 	}
+		// }
+		tbb::parallel_for(0U, horizontalResolution, [&](unsigned int i){
+			tbb::parallel_for(0U, verticalResolution, [&](unsigned int j){
+				image[i][j] = _get_pixel_value(
+					start,
+					end,
+					{box.get_bottom_corner()[0] + stepX * i, box.get_bottom_corner()[1] + stepY * j},
+					delta,
+					p,
+					normalize,
+					moduleWeight);
 			});
-		} // Timer death
-	}
+		});
+	} // Timer death
+}
 	
 	inline void Module::_compute_2D_image(
 		Module::image_type &image,
@@ -1111,7 +1328,7 @@ namespace Gudhi::mma
 		const module_type::const_iterator end,
 		unsigned int horizontalResolution,
 		unsigned int verticalResolution,
-		get_pixel_value_function_type get_pixel_value)const
+		get_2dpixel_value_function_type get_pixel_value)const
 	{
 		image.resize(horizontalResolution, std::vector<value_type>(verticalResolution));
 		const Box<value_type> &box = this->box_;

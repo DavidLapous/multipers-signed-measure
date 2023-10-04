@@ -31,8 +31,8 @@ ctypedef vector[summand_list_type] approx_summand_type
 ctypedef vector[int] simplex_type
 
 
-cdef extern from "multi_filtrations/finitely_critical_filtrations.h" namespace "Gudhi::multi_filtrations":
-	cdef cppclass Finitely_critical_multi_filtration "Gudhi::multi_filtrations::Finitely_critical_multi_filtration<Gudhi::Simplex_tree_options_multidimensional_filtration::value_type>":
+cdef extern from "multi_filtrations/finitely_critical_filtrations.h" namespace "Gudhi::multiparameter::multi_filtrations":
+	cdef cppclass Finitely_critical_multi_filtration "Gudhi::multiparameter::multi_filtrations::Finitely_critical_multi_filtration<Gudhi::multiparameter::Simplex_tree_options_multidimensional_filtration::value_type>":
 		Finitely_critical_multi_filtration()  except + nogil
 		Finitely_critical_multi_filtration(filtration_type) except +
 		Finitely_critical_multi_filtration& operator=(const Finitely_critical_multi_filtration&) except +
@@ -42,13 +42,14 @@ cdef extern from "multi_filtrations/finitely_critical_filtrations.h" namespace "
 		multifiltration& to_python(vector[Finitely_critical_multi_filtration]&) nogil const 
 		@staticmethod
 		vector[Finitely_critical_multi_filtration]& from_python(multifiltration&) nogil const 
+		vector[value_type]& _convert_back() nogil
 		filtration_type __filtration_type__(self):
 			return self.get_vector()
 
 ctypedef Finitely_critical_multi_filtration cfiltration_type
 ctypedef vector[cfiltration_type] cmultifiltration_type
 
-cdef extern from "multi_filtrations/box.h" namespace "Gudhi::mma":
+cdef extern from "multi_filtrations/box.h" namespace "Gudhi::multiparameter::mma":
 	cdef cppclass Box[value_type]:
 		Box()   except +
 		Box(const corner_type&, const corner_type&) nogil 
@@ -56,15 +57,16 @@ cdef extern from "multi_filtrations/box.h" namespace "Gudhi::mma":
 		void inflate(value_type)  nogil 
 		const Finitely_critical_multi_filtration& get_bottom_corner()  nogil 
 		const Finitely_critical_multi_filtration& get_upper_corner()  nogil 
-		bool contains(corner_type&)  nogil 
+		bool contains(corner_type&)  nogil
+		pair[Finitely_critical_multi_filtration, Finitely_critical_multi_filtration] get_pair() nogil
 
-cdef extern from "multi_filtrations/line.h" namespace "Gudhi::mma":
+cdef extern from "multi_filtrations/line.h" namespace "Gudhi::multiparameter::mma":
 	cdef cppclass Line[value_type]:
 		Line()   except + nogil
 		Line(point_type&)   except + nogil
 		Line(point_type&, point_type&)   except + nogil
 
-cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::mma":
+cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::multiparameter::mma":
 	cdef cppclass Summand:
 		Summand() except +
 		Summand(vector[Finitely_critical_multi_filtration]&, vector[Finitely_critical_multi_filtration]&, int)  except + nogil
@@ -79,11 +81,14 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 		dimension_type get_dimension()  nogil const 
 		void set_dimension(int) nogil
 		bool contains(const corner_type&)  nogil const
+		Box[value_type] get_bounds() nogil const
+		void rescale(const vector[value_type]&) nogil
 
 
 
 
-cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::mma":
+
+cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::multiparameter::mma":
 	cdef cppclass MultiDiagram_point:
 		MultiDiagram_point()   except + nogil
 		MultiDiagram_point(dimension_type , corner_type , corner_type )   except + nogil
@@ -91,7 +96,7 @@ cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gu
 		filtration_type get_death()  nogil const 
 		dimension_type get_dimension() nogil  const 
 
-cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::mma":
+cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::multiparameter::mma":
 	cdef cppclass MultiDiagram:
 		MultiDiagram()   except + nogil
 		barcode get_points(const dimension_type) const  
@@ -101,7 +106,7 @@ cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gu
 		unsigned int size() const  
 		MultiDiagram_point& at(unsigned int)  nogil
 
-cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::mma":
+cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gudhi::multiparameter::mma":
 	cdef cppclass MultiDiagrams:
 		MultiDiagrams()  except + nogil
 		vector[vector[vector[value_type]]] to_multipers() nogil const    
@@ -112,7 +117,7 @@ cdef extern from "multiparameter_module_approximation/utilities.h" namespace "Gu
 		plot_interface_type _for_python_plot(dimension_type, value_type)  nogil
 		barcodes get_points()  nogil
 
-cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::mma":
+cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::multiparameter::mma":
 	cdef cppclass Module:
 		Module()  except + nogil
 		void resize(unsigned int)  nogil
@@ -126,6 +131,7 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 		void add_summand(Summand)  nogil
 		unsigned int size() const  
 		Box[value_type] get_box() const  
+		Box[value_type] get_bounds() nogil const
 		void set_box(Box[value_type] &box)  nogil
 		int get_dimension() const 
 		vector[corner_list] get_corners_of_dimension(unsigned int)  nogil
@@ -136,3 +142,6 @@ cdef extern from "multiparameter_module_approximation/approximation.h" namespace
 		image_type get_landscape(const dimension_type,const unsigned int,Box[value_type]&,const vector[unsigned int]&)  nogil
 		vector[image_type] get_landscapes(const dimension_type,const vector[unsigned int],Box[value_type]&,const vector[unsigned int]&)  nogil
 		euler_curve_type euler_curve(const vector[Finitely_critical_multi_filtration]&) nogil
+		void rescale(const vector[value_type]&, int) nogil
+		void translate(const vector[value_type]&, int) nogil
+		vector[vector[value_type]] compute_pixels(const vector[vector[value_type]], vector[int], Box[value_type], value_type, value_type, bool) nogil

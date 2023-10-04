@@ -1,7 +1,8 @@
-from gudhi import SimplexTree ## Small hack for typing
-from multipers.multiparameter_module_approximation import PyModule
 import numpy as np
+from gudhi.simplex_tree import SimplexTree ## Small hack for typing
+from multipers.multiparameter_module_approximation import PyModule
 from typing import Iterable
+from tqdm import tqdm
 
 
 # SimplexTree python interface
@@ -15,6 +16,7 @@ class SimplexTreeMulti:
 	This class is a multi-filtered, with keys, and non contiguous vertices version
 	of the simplex tree. 
 	"""
+
 	def __init__(self, other = None, num_parameters:int=2,default_values=[]):
 		"""SimplexTreeMulti constructor.
 		
@@ -29,13 +31,18 @@ class SimplexTreeMulti:
 
 		:raises TypeError: In case `other` is neither `None`, nor a `SimplexTree`, nor a `SimplexTreeMulti`.
 		"""
-	def __dealloc__(self):
-		...
+		
+	
 
 	def __is_defined(self):
 		"""Returns true if SimplexTree pointer is not NULL.
 			"""
-		...
+		pass
+
+	# def __is_persistence_defined(self):
+	#     """Returns true if Persistence pointer is not NULL.
+	#      """
+	#     return self.pcohptr != NULL
 
 	def copy(self)->SimplexTreeMulti:
 		"""
@@ -81,7 +88,11 @@ class SimplexTreeMulti:
 		"""
 		...
 
+	def __getitem__(self, simplex):
+		...
 	
+
+	@property
 	def num_vertices(self)->int:
 		"""This function returns the number of vertices of the simplicial
 		complex.
@@ -90,6 +101,8 @@ class SimplexTreeMulti:
 		:rtype:  int
 		"""
 		...
+	
+	@property
 	def num_simplices(self)->int:
 		"""This function returns the number of simplices of the simplicial
 		complex.
@@ -99,6 +112,7 @@ class SimplexTreeMulti:
 		"""
 		...
 
+	@property
 	def dimension(self)->int:
 		"""This function returns the dimension of the simplicial complex.
 
@@ -122,7 +136,7 @@ class SimplexTreeMulti:
 		:returns:  an upper bound on the dimension of the simplicial complex.
 		:rtype:  int
 		"""
-		...
+		return self.get_ptr().upper_bound_dimension()
 
 	def set_dimension(self, dimension)->None:
 		"""This function sets the dimension of the simplicial complex.
@@ -142,7 +156,17 @@ class SimplexTreeMulti:
 		"""
 		...
 
-	def find(self, simplex)->bool:
+	# def find(self, simplex)->bool:
+	# 	"""This function returns if the N-simplex was found in the simplicial
+	# 	complex or not.
+
+	# 	:param simplex: The N-simplex to find, represented by a list of vertex.
+	# 	:type simplex: list of int
+	# 	:returns:  true if the simplex was found, false otherwise.
+	# 	:rtype:  bool
+	# 	"""
+	# 	return self.get_ptr().find_simplex(simplex)
+	def __contains__(self, simplex)->bool:
 		"""This function returns if the N-simplex was found in the simplicial
 		complex or not.
 
@@ -169,8 +193,10 @@ class SimplexTreeMulti:
 		:rtype:  bool
 		"""
 		...
-
-	def insert_batch(self, vertex_array:np.ndarray, filtrations:np.ndarray)->SimplexTreeMulti:
+		
+	@cython.boundscheck(False)
+	@cython.wraparound(False)
+	def insert_batch(self, some_int[:,:] vertex_array, some_float[:,:]  filtrations)->SimplexTreeMulti:
 		"""Inserts k-simplices given by a sparse array in a format similar
 		to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
 		The n-th simplex has vertices `vertex_array[0,n]`, ...,
@@ -183,10 +209,14 @@ class SimplexTreeMulti:
 		:param filtrations: the filtration values.
 		:type filtrations: numpy.array of shape (n,num_parameters)
 		"""
+		# TODO : multi-critical
+		# cdef vector[int] vertices = np.unique(vertex_array)
 		...
 
 
-	def assign_batch_filtration(self, vertex_array:np.ndarray, filtrations:np.ndarray, bool propagate=True)->SimplexTreeMulti:
+	@cython.boundscheck(False)
+	@cython.wraparound(False)
+	def assign_batch_filtration(self, some_int[:,:] vertex_array, some_float[:,:]  filtrations, bool propagate=True)->SimplexTreeMulti:
 		"""Assign k-simplices given by a sparse array in a format similar
 		to `torch.sparse <https://pytorch.org/docs/stable/sparse.html>`_.
 		The n-th simplex has vertices `vertex_array[0,n]`, ...,
@@ -200,6 +230,7 @@ class SimplexTreeMulti:
 		:type filtrations: numpy.array of shape (n,num_parameters)
 		"""
 		...
+
 
 
 	def get_simplices(self):
@@ -285,7 +316,30 @@ class SimplexTreeMulti:
 		"""
 		...
 
-	def expansion(self, max_dim:int)->SimplexTreeMulti:
+	# def prune_above_filtration(self, filtration)->bool:
+	# 	"""Prune above filtration value given as parameter.
+
+	# 	:param filtration: Maximum threshold value.
+	# 	:type filtration: float
+	# 	:returns: The filtration modification information.
+	# 	:rtype: bool
+
+
+	# 	.. note::
+
+	# 		Note that the dimension of the simplicial complex may be lower
+	# 		after calling
+	# 		:func:`prune_above_filtration`
+	# 		than it was before. However,
+	# 		:func:`upper_bound_dimension`
+	# 		will return the old value, which remains a
+	# 		valid upper bound. If you care, you can call
+	# 		:func:`dimension`
+	# 		method to recompute the exact dimension.
+	# 	"""
+	# 	return self.get_ptr().prune_above_filtration(filtration)
+
+	def expansion(self, int max_dim)->SimplexTreeMulti:
 		"""Expands the simplex tree containing only its one skeleton
 		until dimension max_dim.
 
@@ -304,7 +358,7 @@ class SimplexTreeMulti:
 		"""
 		...
 
-	def make_filtration_non_decreasing(self)->bool: # FIXME TODO code in c++
+	def make_filtration_non_decreasing(self)->bool: 
 		"""This function ensures that each simplex has a higher filtration
 		value than its faces by increasing the filtration values.
 
@@ -328,36 +382,107 @@ class SimplexTreeMulti:
 		"""
 		...
 
-		
-	def persistence_approximation(self, **kwargs)->PyModule:
-		"""Computes an interval module approximation of a multiparameter filtration.
+	
 
-		Parameters
-		----------
-		max_error: positive float
-			Trade-off between approximation and computational complexity.
-			Upper bound of the module approximation, in bottleneck distance, 
-			for interval-decomposable modules.
-		nlines: int
-			Alternative to precision.
-		box : pair of list of floats
-			Defines a rectangle on which to compute the approximation.
-			Format : [x,y], where x,y defines the rectangle {z : x ≤ z ≤ y}
-		threshold: bool
-			When true, computes the module restricted to the box.
-		max_dimension:int
-			Max simplextree dimension to consider. 
-		verbose: bool
-			Prints C++ infos.
-		ignore_warning : bool
-			Unless set to true, prevents computing on more than 10k lines. Useful to prevent a segmentation fault due to "infinite" recursion.
+	# def extend_filtration(self):
+	#     """ Extend filtration for computing extended persistence. This function only uses the filtration values at the
+	#     0-dimensional simplices, and computes the extended persistence diagram induced by the lower-star filtration
+	#     computed with these values.
+	#
+	#     .. note::
+	#
+	#         Note that after calling this function, the filtration values are actually modified within the simplex tree.
+	#         The function :func:`extended_persistence` retrieves the original values.
+	#
+	#     .. note::
+	#
+	#         Note that this code creates an extra vertex internally, so you should make sure that the simplex tree does
+	#         not contain a vertex with the largest possible value (i.e., 4294967295).
+	#
+	#     This `notebook <https://github.com/GUDHI/TDA-tutorial/blob/master/Tuto-GUDHI-extended-persistence.ipynb>`_
+	#     explains how to compute an extension of persistence called extended persistence.
+	#     """
+	#     self.get_ptr().compute_extended_filtration()
+
+	# def extended_persistence(self, homology_coeff_field=11, min_persistence=0):
+	#     """This function retrieves good values for extended persistence, and separate the diagrams into the Ordinary,
+	#     Relative, Extended+ and Extended- subdiagrams.
+	#
+	#     :param homology_coeff_field: The homology coefficient field. Must be a prime number. Default value is 11. Max is 46337.
+	#     :type homology_coeff_field: int
+	#     :param min_persistence: The minimum persistence value (i.e., the absolute value of the difference between the
+	#         persistence diagram point coordinates) to take into account (strictly greater than min_persistence).
+	#         Default value is 0.0. Sets min_persistence to -1.0 to see all values.
+	#     :type min_persistence: float
+	#     :returns: A list of four persistence diagrams in the format described in :func:`persistence`. The first one is
+	#         Ordinary, the second one is Relative, the third one is Extended+ and the fourth one is Extended-.
+	#         See https://link.springer.com/article/10.1007/s10208-008-9027-z and/or section 2.2 in
+	#         https://link.springer.com/article/10.1007/s10208-017-9370-z for a description of these subtypes.
+	#
+	#     .. note::
+	#
+	#         This function should be called only if :func:`extend_filtration` has been called first!
+	#
+	#     .. note::
+	#
+	#         The coordinates of the persistence diagram points might be a little different than the
+	#         original filtration values due to the internal transformation (scaling to [-2,-1]) that is
+	#         performed on these values during the computation of extended persistence.
+	#
+	#     This `notebook <https://github.com/GUDHI/TDA-tutorial/blob/master/Tuto-GUDHI-extended-persistence.ipynb>`_
+	#     explains how to compute an extension of persistence called extended persistence.
+	#     """
+	#     cdef vector[pair[int, pair[value_type, value_type]]] persistence_result
+	#     if self.pcohptr != NULL:
+	#         del self.pcohptr
+	#     self.pcohptr = new Simplex_tree_persistence_interface(self.get_ptr(), False)
+	#     self.pcohptr.compute_persistence(homology_coeff_field, -1.)
+	#     return self.pcohptr.compute_extended_persistence_subdiagrams(min_persistence)
+
+	# TODO : cython3
+	# def expansion_with_blocker(self, max_dim, blocker_func):
+	# 	"""Expands the Simplex_tree containing only a graph. Simplices corresponding to cliques in the graph are added
+	# 	incrementally, faces before cofaces, unless the simplex has dimension larger than `max_dim` or `blocker_func`
+	# 	returns `True` for this simplex.
+
+	# 	The function identifies a candidate simplex whose faces are all already in the complex, inserts it with a
+	# 	filtration value corresponding to the maximum of the filtration values of the faces, then calls `blocker_func`
+	# 	with this new simplex (represented as a list of int). If `blocker_func` returns `True`, the simplex is removed,
+	# 	otherwise it is kept. The algorithm then proceeds with the next candidate.
+
+	# 	.. warning::
+	# 		Several candidates of the same dimension may be inserted simultaneously before calling `blocker_func`, so
+	# 		if you examine the complex in `blocker_func`, you may hit a few simplices of the same dimension that have
+	# 		not been vetted by `blocker_func` yet, or have already been rejected but not yet removed.
+
+	# 	:param max_dim: Expansion maximal dimension value.
+	# 	:type max_dim: int
+	# 	:param blocker_func: Blocker oracle.
+	# 	:type blocker_func: Callable[[List[int]], bool]
+	# 	"""
+	# 	self.get_ptr().expansion_with_blockers_callback(max_dim, callback, <void*>blocker_func)
+
+	# def persistence(self, homology_coeff_field=11, min_persistence=0, persistence_dim_max = False):
+	#     """This function computes and returns the persistence of the simplicial complex.
+	#
+	#     :param homology_coeff_field: The homology coefficient field. Must be a
+	#         prime number. Default value is 11. Max is 46337.
+	#     :type homology_coeff_field: int
+	#     :param min_persistence: The minimum persistence value to take into
+	#         account (strictly greater than min_persistence). Default value is
+	#         0.0.
+	#         Set min_persistence to -1.0 to see all values.
+	#     :type min_persistence: float
+	#     :param persistence_dim_max: If true, the persistent homology for the
+	#         maximal dimension in the complex is computed. If false, it is
+	#         ignored. Default is false.
+	#     :type persistence_dim_max: bool
+	#     :returns: The persistence of the simplicial complex.
+	#     :rtype:  list of pairs(dimension, pair(birth, death))
+	#     """
+	#     self.compute_persistence(homology_coeff_field, min_persistence, persistence_dim_max)
+	#     return self.pcohptr.get_persistence()
 		
-		Returns
-		-------
-		PyModule
-			An interval decomposable module approximation of the module defined by the
-			homology of this multi-filtration.
-		"""
 		
 		
 ## This function is only meant for the edge collapse interface.
@@ -391,7 +516,9 @@ class SimplexTreeMulti:
 			A (smaller) simplex tree that has the same homology over this bifiltration.
 
 		"""
+		# TODO : find a way to do multiple edge collapses without python conversions.
 		...
+
 	def _reconstruct_from_edge_list(self, edges, swap:bool=True, expand_dimension:int=None)->SimplexTreeMulti:
 		"""
 		Generates a 1-dimensional copy of self, with the edges given as input. Useful for edge collapses
@@ -412,7 +539,7 @@ class SimplexTreeMulti:
 	@property
 	def num_parameters(self)->int:
 		...
-	def get_simplices_of_dimension(self, dim:int):
+	def get_simplices_of_dimension(self, dim:int)->np.ndarray:
 		...
 	def key(self, simplex:list|np.ndarray):
 		...
@@ -467,14 +594,18 @@ class SimplexTreeMulti:
 		Nothing
 		"""
 		...
-		...
 
 
 
-	def _get_filtration_values(self, degrees:Iterable[int], inf_to_nan:bool=False)->Iterable[np.ndarray]:
+	def _get_filtration_values(self, vector[int] degrees, bool inf_to_nan:bool=False)->Iterable[np.ndarray]:
+		# cdef vector[int] c_degrees = degrees
 		...
 	
-	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, q:float=0., grid_strategy:str="regular")->Iterable[np.ndarray]:
+	@staticmethod
+	def _reduce_grid(filtrations_values,resolutions=None, strategy:str="exact", bool unique=True, some_float _q_factor=1., drop_quantiles=[0,0]):
+		...
+	
+	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, drop_quantiles:float|tuple=0, grid_strategy:str="exact")->Iterable[np.ndarray]:
 		"""
 		Returns a grid over the n-filtration, from the simplextree. Usefull for grid_squeeze. TODO : multicritical
 
@@ -493,8 +624,9 @@ class SimplexTreeMulti:
 		"""
 		...
 	
+	
 
-	def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, coordinate_values:bool=True)->SimplexTreeMulti:
+	def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, coordinate_values:bool=True, force=False, **filtration_grid_kwargs)->SimplexTreeMulti:
 		"""
 		Fit the filtration of the simplextree to a grid.
 		
@@ -504,13 +636,17 @@ class SimplexTreeMulti:
 		:type coordinate_values: bool
 		"""
 		...
-		return self
 
-	def filtration_bounds(self, degrees:Iterable[int]|None=None, q:float=0, split_dimension:bool=False)->np.ndarray:
+	@property
+	def _is_squeezed(self)->bool:
+		...
+
+	def filtration_bounds(self, degrees:Iterable[int]|None=None, q:float|tuple=0, split_dimension:bool=False)->np.ndarray:
 		"""
 		Returns the filtrations bounds of the finite filtration values.
 		"""
 		...
+
 
 	
 
@@ -531,7 +667,6 @@ class SimplexTreeMulti:
 		# for s, sf in self.get_simplices():
 		# 	self.assign_filtration(s, [f if i != dimension else np.max(np.array(F)[s]) for i,f in enumerate(sf)])
 		...
-
 
 	def project_on_line(self, parameter:int=0, basepoint:None|list|np.ndarray= None)->SimplexTree:
 		"""Converts an multi simplextree to a gudhi simplextree.
@@ -564,6 +699,7 @@ class SimplexTreeMulti:
 		"""
 		...
 
+
 	def set_num_parameter(self, num:int):
 		"""
 		Sets the numbers of parameters. 
@@ -578,39 +714,3 @@ class SimplexTreeMulti:
 		"""
 		...
 	
-	def euler_char(self, points:np.ndarray|list) -> np.ndarray:
-		""" Computes the Euler Characteristic of the filtered complex at given (multiparameter) time
-
-		Parameters
-		----------
-		points: 2-dimensional array.
-			List of filtration values on which to compute the euler characteristic.
-
-		Returns
-		-------
-		The list of euler characteristic values
-		"""
-		...
-
-
-
-def _collapse_edge_list(edges, num:int=0, full:bool=False, strong:bool=False, progress:bool=False):
-	"""
-	Given an edge list defining a 1 critical 2 parameter 1 dimensional simplicial complex, simplificates this filtered simplicial complex, using filtration-domination's edge collapser.
-	"""
-	...
-
-
-
-
-def _simplextree_multify(simplextree:SimplexTree, num_parameters:int=2, default_values=[])->SimplexTreeMulti:
-	"""Converts a gudhi simplextree to a multi simplextree.
-	Parameters
-	----------
-		parameters:int = 2
-			The number of filtrations
-	Returns
-	-------
-		A multi simplextree, with first filtration value being the one from the original simplextree.
-	"""
-	...

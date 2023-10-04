@@ -30,7 +30,7 @@
 //#include "ru_matrix.h"
 //#include "list_column.h"
 
-namespace Gudhi::mma {
+namespace Gudhi::multiparameter::mma {
 
 struct Filtration_creator
 {

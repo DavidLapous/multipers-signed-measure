@@ -12,8 +12,6 @@
 import gudhi as gd
 import numpy as np
 from typing import List
-from tqdm import tqdm 
-from cycler import cycler
 import pickle as pk
 
 ###########################################################################
@@ -44,7 +42,7 @@ from multipers.simplex_tree_multi import SimplexTreeMulti
 # cnp.import_array()
 
 ###################################### MMA
-cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::mma":
+cdef extern from "multiparameter_module_approximation/approximation.h" namespace "Gudhi::multiparameter::mma":
 	Module compute_vineyard_barcode_approximation(boundary_matrix, vector[Finitely_critical_multi_filtration] , value_type precision, Box[value_type] &, bool threshold, bool complete, bool multithread, bool verbose) nogil
 
 
@@ -62,12 +60,28 @@ cdef class PySummand:
 	def get_death_list(self)->list:
 		return Finitely_critical_multi_filtration.to_python(self.sum.get_death_list())
 	@property
-	def num_parameters(self)->int:
+	def degree(self)->int:
 		return self.sum.get_dimension()
 	
 	cdef set(self, Summand& summand):
 		self.sum = summand
 		return self
+	def get_bounds(self):
+		cdef pair[Finitely_critical_multi_filtration,Finitely_critical_multi_filtration] cbounds
+		with nogil:
+			cbounds = self.sum.get_bounds().get_pair()
+		# return np.array(<value_type[:self.num_parameters]>(&cbounds.first[0])),np.array(<value_type[:self.num_parameters]>(&cbounds.second[0]))
+		return np.asarray(cbounds.first._convert_back()), np.asarray(cbounds.second._convert_back())
+
+cdef get_summand_filtration_values(Summand summand):
+	births = np.asarray(Finitely_critical_multi_filtration.to_python(summand.get_birth_list()))
+	deaths = np.asarray(Finitely_critical_multi_filtration.to_python(summand.get_birth_list()))
+	pts = np.concatenate([births,deaths],axis=0)
+	num_parameters = pts.shape[1]
+	out = [np.unique(pts[:,parameter]) for parameter in range(num_parameters)]
+	out = [f[:-1] if f[-1] == np.inf else f for f in out]
+	out = [f[1:]  if f[0] == -np.inf else f for f in out]
+	return out
 
 cdef class PyBox:
 	cdef Box[value_type] box
@@ -168,6 +182,7 @@ cdef class PyMultiDiagrams:
 		-------
 		Nothing
 		"""
+		from cycler import cycler
 		if len(self) == 0: return
 		_cmap = get_cmap("Spectral")
 		multibarcodes_, colors = self._get_plot_bars(degree, min_persistence)
@@ -185,18 +200,41 @@ cdef class PyModule:
 
 	cdef set(self, Module m):
 		self.cmod = m
-	cdef set_box(self, Box[value_type]& box):
-		self.cmod.set_box(box)
+	def set_box(self, PyBox pybox):
+		cdef Box[value_type] cbox = pybox.box
+		with nogil:
+			self.cmod.set_box(cbox)
 		return self
-	def get_module_of_dimension(self, degree:int)->PyModule: # TODO : in c++ ?
+	def get_module_of_degree(self, int degree)->PyModule: # TODO : in c++ ?
 		pmodule = PyModule()
 		cdef Box[value_type] c_box = self.cmod.get_box()
-		pmodule.set_box(c_box)
-		for summand in self.cmod:
-			if summand.get_dimension() == degree:
-				pmodule.cmod.add_summand(summand)
+		pmodule.cmod.set_box(c_box) 
+		with nogil:
+			for summand in self.cmod:
+				if summand.get_dimension() == degree:
+					pmodule.cmod.add_summand(summand)
 		return pmodule
-
+	def get_module_of_degrees(self, degrees:Iterable[int])->PyModule: # TODO : in c++ ?
+		pmodule = PyModule()
+		cdef Box[value_type] c_box = self.cmod.get_box()
+		pmodule.cmod.set_box(c_box)
+		cdef vector[int] cdegrees = degrees
+		with nogil:
+			for summand in self.cmod:
+				for d in cdegrees:
+					if d == summand.get_dimension():
+						pmodule.cmod.add_summand(summand)
+		return pmodule
+	def _compute_pixels(self,coordinates:np.ndarray, degrees=None, box=None, value_type delta=.1, value_type p=1., bool normalize=False):
+		if degrees is not None: assert np.all(degrees[:-1] <= degrees[1:]), "Degrees have to be sorted"
+		cdef vector[int] cdegrees = np.arange(self.max_degree +1) if degrees is None else degrees
+		pybox = PyBox(*self.get_box()) if box is None else PyBox(*box)
+		cdef Box[value_type] cbox = pybox.box
+		cdef vector[vector[value_type]] ccoords = coordinates
+		cdef vector[vector[value_type]] out 
+		with nogil:
+			out = self.cmod.compute_pixels(ccoords, cdegrees, cbox, delta, p, normalize)
+		return np.asarray(out)
 	def __len__(self)->int:
 		return self.cmod.size()
 	def get_bottom(self)->list:
@@ -204,10 +242,15 @@ cdef class PyModule:
 	def get_top(self)->list:
 		return self.cmod.get_box().get_upper_corner().get_vector()
 	def get_box(self):
-		return [self.get_bottom(), self.get_top()]
+		return np.asarray([self.get_bottom(), self.get_top()])
+	@property
+	def max_degree(self)->int:
+		return self.cmod.get_dimension()
 	@property
 	def num_parameters(self)->int:
-		return self.cmod.get_dimension()
+		cdef size_t dim = self.cmod.get_box().get_bottom_corner().size()
+		assert dim == self.cmod.get_box().get_upper_corner().size(), "Bad box definition, cannot infer num_parameters."
+		return dim
 	def dump(self, path:str|None=None):
 		"""
 		Dumps the module into a pickle-able format.
@@ -229,11 +272,36 @@ cdef class PyModule:
 			return out
 		pk.dump(out, open(path, "wb"))
 		return out
-	def __getitem__(self, i:int) -> PySummand:
+	def __getitem__(self, i) -> PySummand:
+		if i == slice(None):
+			return self
 		summand = PySummand()
 		summand.set(self.cmod.at(i % self.cmod.size()))
 		return summand
-	
+	def get_bounds(self):
+		cdef pair[Finitely_critical_multi_filtration,Finitely_critical_multi_filtration] cbounds
+		with nogil:
+			cbounds = self.cmod.get_bounds().get_pair()
+		# return np.array(<value_type[:self.num_parameters]>(&cbounds.first[0])),np.array(<value_type[:self.num_parameters]>(&cbounds.second[0]))
+		return np.asarray(cbounds.first._convert_back()), np.asarray(cbounds.second._convert_back())
+	def rescale(self,rescale_factors, int degree=-1):
+		cdef vector[value_type] crescale_factors = rescale_factors
+		with nogil:
+			self.cmod.rescale(crescale_factors,degree)
+	def translate(self,translation, int degree=-1):
+		cdef vector[value_type] ctranslation = translation
+		with nogil:
+			self.cmod.translate(ctranslation,degree)
+
+	def get_filtration_values(self, unique=True):
+		if len(self) ==0:
+			return 
+		values = [get_summand_filtration_values(summand) for summand in self.cmod]
+		values = [np.concatenate([f[parameter] for f in values], axis=0) for  parameter in range(self.num_parameters)]
+		if unique:
+			return [np.unique(f) for f in values]
+		return values
+
 	def plot(self, degree:int=-1,**kwargs)->None:
 		"""Shows the module on a plot. Each color corresponds to an apprimation summand of the module, and its shape corresponds to its support.
 		Only works with 2-parameter modules.
@@ -406,7 +474,7 @@ cdef class PyModule:
 		return out
 
 
-	def image(self, degree:int = -1, bandwidth:float=0.1, resolution:list=[100,100], normalize:bool=False, plot:bool=True, save:bool=False, dpi:int=200,p:float=1., **kwargs)->np.ndarray:
+	def image(self, degrees:Iterable[int]=None, bandwidth:float=0.1, resolution:list|int=50, normalize:bool=False, plot:bool=False, save:bool=False, dpi:int=200,p:float=1., box=None, flatten=False, **kwargs)->np.ndarray:
 		"""Computes a vectorization from a PyModule. Python interface only bifiltrations.
 
 		Parameters
@@ -419,41 +487,65 @@ cdef class PyModule:
 			Resolution of the image(s).
 		normalize = True : Boolean
 			Ensures that the image belongs to [0,1].
-		plot = True : Boolean
+		plot = False : Boolean
 			If true, plots the images;
+		flatten=False :
+			If False, reshapes the output to the expected shape.
 
 		Returns
 		-------
 		List of Numpy arrays or numpy array
 			The list of images, or the image of fixed dimension.
 		"""
-		if (len(self.get_bottom()) != 2):
-			print("Non 2 dimensional images not yet implemented in python !")
-			return np.zeros(shape=resolution)
-		box = kwargs.get("box",[self.get_bottom(),self.get_top()])
-		if degree < 0:
-			image_vector = np.array(self.cmod.get_vectorization(bandwidth, p, normalize, Box[value_type](box), resolution[0], resolution[1]))
+		# box = kwargs.get("box",[self.get_bottom(),self.get_top()])
+		if box is None:
+			box = self.get_box()
+		num_parameters = self.num_parameters
+		if degrees is None:
+			degrees = np.arange(self.max_degree +1)
+		num_degrees = len(degrees)
+		try:
+			int(resolution)
+			resolution = [resolution]*num_parameters
+		except:
+			pass
+
+		xx = [np.linspace(*np.asarray(box)[:,parameter], num=res) for parameter, res in zip(range(num_parameters), resolution)]
+		mesh = np.meshgrid(*xx)
+		coordinates = np.concatenate([stuff.flatten()[:,None] for stuff in mesh], axis=1)
+
+		# if degree < 0:
+		# 	image_vector = np.array(self.cmod.get_vectorization(bandwidth, p, normalize, Box[value_type](box), resolution[0], resolution[1]))
+		# else:
+		# 	image_vector = np.array([self.cmod.get_vectorization_in_dimension(degree, bandwidth, p,normalize,Box[value_type](box),  resolution[0], resolution[1])])
+		
+		concatenated_images = self._compute_pixels(coordinates, degrees=degrees, box=box, delta=bandwidth, p=p, normalize=normalize)
+		if flatten:
+			image_vector = concatenated_images.reshape((len(degrees),-1))
+			if plot:
+				from warnings import warn
+				warn("Unflatten to plot.")
+			return image_vector
 		else:
-			image_vector = np.array([self.cmod.get_vectorization_in_dimension(degree, bandwidth, p,normalize,Box[value_type](box),  resolution[0], resolution[1])])
+			image_vector = concatenated_images.reshape((len(degrees),*resolution))
 		if plot:
+			assert num_parameters == 2 
 			i=0
 			n_plots = len(image_vector)
 			scale:float = kwargs.get("size", 4.0)
 			fig, axs = plt.subplots(1,n_plots, figsize=(n_plots*scale,scale))
 			aspect = (box[1][0]-box[0][0]) / (box[1][1]-box[0][1])
 			extent = [box[0][0], box[1][0], box[0][1], box[1][1]]
-			for image in image_vector:
+			for image, degree, i in zip(image_vector, degrees, range(num_degrees)):
 				ax = axs if n_plots <= 1 else axs[i]
-				temp = ax.imshow(np.flip(np.array(image).transpose(),0),extent=extent, aspect=aspect)
+				temp = ax.imshow(image,origin="lower",extent=extent, aspect=aspect)
 				if (kwargs.get('colorbar') or kwargs.get('cb')):
 					plt.colorbar(temp, ax = ax)
 				if degree < 0 :
 					ax.set_title(rf"$H_{i}$ $2$-persistence image")
 				if degree >= 0:
 					ax.set_title(rf"$H_{degree}$ $2$-persistence image")
-				i+=1
-
-		return image_vector[0] if degree >=0 else  image_vector
+		return image_vector
 
 
 	def euler_char(self, points:list|np.ndarray) -> np.ndarray:
@@ -636,11 +728,11 @@ def from_dump(dump)->PyModule:
 from shapely.geometry import box as _rectangle_box
 from shapely.geometry import Polygon as _Polygon
 from shapely import union_all
-from matplotlib.patches import Rectangle as RectanglePatch
+
 import numpy as np
 from matplotlib.cm import get_cmap
 import matplotlib.pyplot as plt
-import matplotlib
+
 
 
 
@@ -648,6 +740,7 @@ def _rectangle(x,y,color, alpha):
 	"""
 	Defines a rectangle patch in the format {z | x  ≤ z ≤ y} with color and alpha
 	"""
+	from matplotlib.patches import Rectangle as RectanglePatch
 	return RectanglePatch(x, max(y[0]-x[0],0),max(y[1]-x[1],0), color=color, alpha=alpha)
 
 def _d_inf(a,b):
@@ -659,6 +752,7 @@ def _d_inf(a,b):
 	
 
 def plot2d(corners, box = [],*,dimension=-1, separated=False, min_persistence = 0, alpha=1, verbose = False, save=False, dpi=200, shapely = True, xlabel=None, ylabel=None, cmap=None):
+	import matplotlib
 	cmap = matplotlib.colormaps["Spectral"] if cmap is None else matplotlib.colormaps[cmap]
 	if not(separated):
 		# fig, ax = plt.subplots()
@@ -824,7 +918,7 @@ def nlines_precision_box(nlines, basepoint, scale, square = False):
 
 
 
-cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::mma":
+cdef extern from "multiparameter_module_approximation/format_python-cpp.h" namespace "Gudhi::multiparameter::mma":
 	#list_simplicies_to_sparse_boundary_matrix
 	#vector[vector[unsigned int]] build_sparse_boundary_matrix_from_simplex_list(vector[vector[unsigned int]] list_simplices)
 	#list_simplices_ls_filtration_to_sparse_boundary_filtration
@@ -934,5 +1028,6 @@ def estimate_error(st:SimplexTreeMulti, module:PyModule, degree:int, nlines:int 
 	clean = lambda dgm : np.array([[birth[parameter], death[parameter]] for birth,death in dgm if len(birth) > 0 and  birth[parameter] != np.inf])
 	bcs_from_mod = [clean(dgm) for dgm in bcs_from_mod] # we only consider the 1st coordinate of the barcode
 	# Computes gudhi barcodes
+	from tqdm import tqdm
 	bcs_from_gudhi = [_get_bc_ST(st,basepoint=basepoint, degree=degree) for basepoint in tqdm(basepoints, disable= not verbose, desc = "Computing gudhi barcodes")]
 	return max((bottleneck_distance(a,b) for a,b in tqdm(zip(bcs_from_mod, bcs_from_gudhi), disable = not verbose, total=nlines, desc="Computing bottleneck distances")))

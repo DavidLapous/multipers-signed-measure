@@ -19,6 +19,7 @@ from libc.stdint cimport intptr_t, int32_t, int64_t
 from cython.operator import dereference, preincrement
 from libc.stdint cimport intptr_t
 from libc.stdint cimport uintptr_t
+from libcpp.map cimport map
 
 
 ctypedef fused some_int:
@@ -34,13 +35,13 @@ ctypedef vector[pair[pair[int,int],pair[value_type,value_type]]] edge_list_type
 
 from typing import Any
 
-# cimport numpy as cnp
+cimport numpy as cnp
 import numpy as np
-# cnp.import_array()
+cnp.import_array()
 
 from multipers.simplex_tree_multi cimport *
 cimport cython
-from gudhi import SimplexTree ## Small hack for typing
+from gudhi.simplex_tree import SimplexTree ## Small hack for typing
 from multipers.multiparameter_module_approximation import PyModule
 from typing import Iterable
 from tqdm import tqdm
@@ -50,13 +51,13 @@ from tqdm import tqdm
 from warnings import warn
 
 
-cdef extern from "Simplex_tree_multi.h" namespace "Gudhi":
-	void multify(const uintptr_t, const uintptr_t, const unsigned int, const vector[value_type]&) nogil except +
-	void flatten(const uintptr_t, const uintptr_t, const unsigned int) nogil
-	void linear_projection(const uintptr_t, const uintptr_t, const vector[value_type]&) nogil
-	void flatten_diag(const uintptr_t, const uintptr_t, const vector[value_type], int) nogil
-	void squeeze_filtration(uintptr_t, const vector[vector[value_type]]&, bool) nogil except +
-	vector[vector[vector[value_type]]] get_filtration_values(uintptr_t, const vector[int]&) nogil except +
+cdef extern from "gudhi/Simplex_tree_multi.h" namespace "Gudhi::multiparameter":
+	void multify_from_ptr(const uintptr_t, const uintptr_t, const unsigned int, const vector[value_type]&)  except + nogil
+	void flatten_from_ptr(const uintptr_t, const uintptr_t, const unsigned int) nogil
+	void linear_projection_from_ptr(const uintptr_t, const uintptr_t, const vector[value_type]&) nogil
+	void flatten_diag_from_ptr(const uintptr_t, const uintptr_t, const vector[value_type], int) nogil
+	void squeeze_filtration(uintptr_t, const vector[vector[value_type]]&, bool)  except + nogil
+	vector[vector[vector[value_type]]] get_filtration_values(uintptr_t, const vector[int]&)  except + nogil
 
 
 cdef bool callback(vector[int] simplex, void *blocker_func):
@@ -108,9 +109,10 @@ cdef class SimplexTreeMulti:
 			if isinstance(other, SimplexTreeMulti):
 				self.thisptr = _get_copy_intptr(other)
 				num_parameters = other.num_parameters
+				self.filtration_grid = other.filtration_grid
 			elif isinstance(other, SimplexTree): # Constructs a SimplexTreeMulti from a SimplexTree
 				self.thisptr = <intptr_t>(new Simplex_tree_multi_interface())
-				multify(other.thisptr, self.thisptr, num_parameters, c_default_values)
+				multify_from_ptr(other.thisptr, self.thisptr, num_parameters, c_default_values)
 			else:
 				raise TypeError("`other` argument requires to be of type `SimplexTree`, `SimplexTreeMulti`, or `None`.")
 		else:
@@ -143,8 +145,7 @@ cdef class SimplexTreeMulti:
 		:note: The persistence information is not copied. If you need it in the clone, you have to call
 			:func:`compute_persistence` on it even if you had already computed it in the original.
 		"""
-		stree = SimplexTreeMulti(num_parameters=self.num_parameters)
-		stree.thisptr = _get_copy_intptr(self)
+		stree = SimplexTreeMulti(self,num_parameters=self.num_parameters)
 		return stree
 
 	def __deepcopy__(self):
@@ -159,8 +160,7 @@ cdef class SimplexTreeMulti:
 		:returns:  The simplicial complex multi-critical filtration value.
 		:rtype:  numpy array of shape (-1, num_parameters)
 		"""
-		filtration_vector = np.array(self.get_ptr().simplex_filtration(simplex))
-		return filtration_vector.reshape((-1, self.num_parameters))
+		return self[simplex]
 
 	def assign_filtration(self, simplex:list|np.ndarray, filtration:list|np.ndarray)->None:
 		"""This function assigns a new multi-critical filtration value to a
@@ -181,9 +181,15 @@ cdef class SimplexTreeMulti:
 			:meth:`persistence`.
 		"""
 		assert len(filtration)>0 and len(filtration) % self.get_ptr().get_number_of_parameters() == 0
-		self.get_ptr().assign_simplex_filtration(simplex, filtration)
+		self.get_ptr().assign_simplex_filtration(simplex, Finitely_critical_multi_filtration(<python_filtration_type>filtration))
 
+	def __getitem__(self, simplex):
+		cdef vector[int] csimplex = simplex 
+		cdef value_type[:] filtration_view = <value_type[:self.get_ptr().get_number_of_parameters()]> self.get_ptr().simplex_filtration(csimplex)
+		return np.asarray(filtration_view)
 	
+
+	@property
 	def num_vertices(self)->int:
 		"""This function returns the number of vertices of the simplicial
 		complex.
@@ -192,6 +198,8 @@ cdef class SimplexTreeMulti:
 		:rtype:  int
 		"""
 		return self.get_ptr().num_vertices()
+	
+	@property
 	def num_simplices(self)->int:
 		"""This function returns the number of simplices of the simplicial
 		complex.
@@ -201,6 +209,7 @@ cdef class SimplexTreeMulti:
 		"""
 		return self.get_ptr().num_simplices()
 
+	@property
 	def dimension(self)->int:
 		"""This function returns the dimension of the simplicial complex.
 
@@ -244,7 +253,17 @@ cdef class SimplexTreeMulti:
 		"""
 		self.get_ptr().set_dimension(<int>dimension)
 
-	def find(self, simplex)->bool:
+	# def find(self, simplex)->bool:
+	# 	"""This function returns if the N-simplex was found in the simplicial
+	# 	complex or not.
+
+	# 	:param simplex: The N-simplex to find, represented by a list of vertex.
+	# 	:type simplex: list of int
+	# 	:returns:  true if the simplex was found, false otherwise.
+	# 	:rtype:  bool
+	# 	"""
+	# 	return self.get_ptr().find_simplex(simplex)
+	def __contains__(self, simplex)->bool:
 		"""This function returns if the N-simplex was found in the simplicial
 		complex or not.
 
@@ -275,7 +294,7 @@ cdef class SimplexTreeMulti:
 		assert filtration is None or len(filtration) % num_parameters == 0
 		if filtration is None:	
 			filtration = np.array([-np.inf]*num_parameters, dtype = float)
-		return self.get_ptr().insert(simplex, <filtration_type>filtration)
+		return self.get_ptr().insert(simplex, Finitely_critical_multi_filtration(<python_filtration_type>filtration))
 		
 	@cython.boundscheck(False)
 	@cython.wraparound(False)
@@ -301,7 +320,7 @@ cdef class SimplexTreeMulti:
 		cdef Py_ssize_t i
 		cdef Py_ssize_t j
 		cdef vector[int] v
-		cdef vector[value_type] w
+		cdef Finitely_critical_multi_filtration w
 		cdef int n_parameters = self.num_parameters
 		with nogil:
 			for i in range(n):
@@ -337,7 +356,7 @@ cdef class SimplexTreeMulti:
 		cdef Py_ssize_t i
 		cdef Py_ssize_t j
 		cdef vector[int] v
-		cdef vector[value_type] w
+		cdef Finitely_critical_multi_filtration w
 		cdef int n_parameters = self.num_parameters
 		with nogil:
 			for i in range(n):
@@ -350,6 +369,7 @@ cdef class SimplexTreeMulti:
 				w.clear()
 		if propagate: self.make_filtration_non_decreasing()
 		return self
+
 
 
 	def get_simplices(self):
@@ -369,8 +389,11 @@ cdef class SimplexTreeMulti:
 		# 	yield out
 		# 	preincrement(it)
 		# cdef pair[simplex_type,filtration_type] out
+		cdef int num_parameters = self.get_ptr().get_number_of_parameters()
 		while it != end:
-			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
+			pair = self.get_ptr().get_simplex_and_filtration(dereference(it))
+
+			yield (np.asarray(pair.first, dtype=int),np.asarray(<value_type[:num_parameters]> pair.second))
 			# yield SimplexTreeMulti._pair_simplex_filtration_to_python(out)
 			preincrement(it)
 
@@ -383,9 +406,11 @@ cdef class SimplexTreeMulti:
 		"""
 		cdef vector[Simplex_tree_multi_simplex_handle].const_iterator it = self.get_ptr().get_filtration_iterator_begin()
 		cdef vector[Simplex_tree_multi_simplex_handle].const_iterator end = self.get_ptr().get_filtration_iterator_end()
-
+		cdef int num_parameters = self.get_ptr().get_number_of_parameters()
 		while it != end:
-			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
+			# yield self.get_ptr().get_simplex_and_filtration(dereference(it))
+			pair = self.get_ptr().get_simplex_and_filtration(dereference(it))
+			yield (np.asarray(pair.first, dtype=int),np.asarray(<value_type[:num_parameters]> pair.second))
 			preincrement(it)
 
 	def get_skeleton(self, dimension):
@@ -398,9 +423,11 @@ cdef class SimplexTreeMulti:
 		"""
 		cdef Simplex_tree_multi_skeleton_iterator it = self.get_ptr().get_skeleton_iterator_begin(dimension)
 		cdef Simplex_tree_multi_skeleton_iterator end = self.get_ptr().get_skeleton_iterator_end(dimension)
-
+		cdef int num_parameters = self.get_ptr().get_number_of_parameters()
 		while it != end:
-			yield self.get_ptr().get_simplex_and_filtration(dereference(it))
+			# yield self.get_ptr().get_simplex_and_filtration(dereference(it))
+			pair = self.get_ptr().get_simplex_and_filtration(dereference(it))
+			yield (np.asarray(pair.first, dtype=int),np.asarray(<value_type[:num_parameters]> pair.second))
 			preincrement(it)
 
 	def get_star(self, simplex):
@@ -411,17 +438,19 @@ cdef class SimplexTreeMulti:
 		:returns:  The (simplices of the) star of a simplex.
 		:rtype:  list of tuples(simplex, filtration)
 		"""
-		cdef simplex_type csimplex
-		for i in simplex:
-			csimplex.push_back(i)
-		cdef vector[pair[simplex_type, filtration_type]] star \
+		cdef simplex_type csimplex = simplex
+		cdef int num_parameters = self.num_parameters
+		# for i in simplex:
+		# 	csimplex.push_back(i)
+		cdef vector[simplex_filtration_type] star \
 			= self.get_ptr().get_star(csimplex)
 		ct = []
+
 		for filtered_simplex in star:
 			v = []
 			for vertex in filtered_simplex.first:
 				v.append(vertex)
-			ct.append((v, filtered_simplex.second))
+			ct.append((v, np.asarray(<value_type[:num_parameters]>filtered_simplex.second)))
 		return ct
 
 	def get_cofaces(self, simplex, codimension):
@@ -436,17 +465,18 @@ cdef class SimplexTreeMulti:
 		:returns:  The (simplices of the) cofaces of a simplex
 		:rtype:  list of tuples(simplex, filtration)
 		"""
-		cdef vector[int] csimplex
-		for i in simplex:
-			csimplex.push_back(i)
-		cdef vector[pair[simplex_type, filtration_type]] cofaces \
+		cdef vector[int] csimplex = simplex
+		cdef int num_parameters = self.num_parameters
+		# for i in simplex:
+		# 	csimplex.push_back(i)
+		cdef vector[simplex_filtration_type] cofaces \
 			= self.get_ptr().get_cofaces(csimplex, <int>codimension)
 		ct = []
 		for filtered_simplex in cofaces:
 			v = []
 			for vertex in filtered_simplex.first:
 				v.append(vertex)
-			ct.append((v, filtered_simplex.second))
+			ct.append((v, np.asarray(<value_type[:num_parameters]>filtered_simplex.second)))
 		return ct
 
 	def get_boundaries(self, simplex):
@@ -461,10 +491,15 @@ cdef class SimplexTreeMulti:
 		"""
 		cdef pair[Simplex_tree_multi_boundary_iterator, Simplex_tree_multi_boundary_iterator] it =  self.get_ptr().get_boundary_iterators(simplex)
 
+		# while it.first != it.second:
+		# 	yield self.get_ptr().get_simplex_and_filtration(dereference(it.first))
+		# 	preincrement(it.first)
+		cdef int num_parameters = self.get_ptr().get_number_of_parameters()
 		while it.first != it.second:
-			yield self.get_ptr().get_simplex_and_filtration(dereference(it.first))
+			# yield self.get_ptr().get_simplex_and_filtration(dereference(it))
+			pair = self.get_ptr().get_simplex_and_filtration(dereference(it.first))
+			yield (np.asarray(pair.first, dtype=int),np.asarray(<value_type[:num_parameters]> pair.second))
 			preincrement(it.first)
-
 	def remove_maximal_simplex(self, simplex):
 		"""This function removes a given maximal N-simplex from the simplicial
 		complex.
@@ -530,7 +565,7 @@ cdef class SimplexTreeMulti:
 			self.get_ptr().make_filtration_non_decreasing()
 		return self
 
-	def make_filtration_non_decreasing(self)->bool: # FIXME TODO code in c++
+	def make_filtration_non_decreasing(self)->bool: 
 		"""This function ensures that each simplex has a higher filtration
 		value than its faces by increasing the filtration values.
 
@@ -555,7 +590,7 @@ cdef class SimplexTreeMulti:
 		:param min_dim: The minimal dimension. Default value is 0.
 		:type min_dim: int.
 		"""
-		self.get_ptr().reset_filtration(filtration, min_dim)
+		self.get_ptr().reset_filtration(Finitely_critical_multi_filtration(<python_filtration_type>filtration), min_dim)
 
 	
 
@@ -688,7 +723,7 @@ cdef class SimplexTreeMulti:
 			homology of this multi-filtration.
 		"""
 		from multipers.multiparameter_module_approximation import module_approximation, PyModule
-		if self.num_simplices() <= 0:
+		if self.num_simplices <= 0:
 			return PyModule()
 		assert self.num_parameters > 1, f"Use standard Gudhi for 1-parameter persistence."
 		return module_approximation(self,**kwargs)
@@ -732,12 +767,13 @@ cdef class SimplexTreeMulti:
 		if num <= 0:
 			return self
 		assert self.num_parameters == 2, "Number of parameters has to be 2 to use edge collapses ! This is a limitation of Filtration-domination"
-		if self.dimension() > 1 and not ignore_warning: warn("This method ignores simplices of dimension > 1 !")
+		if self.dimension > 1 and not ignore_warning: warn("This method ignores simplices of dimension > 1 !")
 		
-		max_dimension = self.dimension() if max_dimension is None else max_dimension
+		max_dimension = self.dimension if max_dimension is None else max_dimension
 
 		# Retrieves the edge list, and send it to filration_domination
 		edges = self.get_edge_list()
+		from multipers.multiparameter_edge_collapse import _collapse_edge_list
 		edges = _collapse_edge_list(edges, num=num, full=full, strong=strong, progress=progress)
 		# Retrieves the collapsed simplicial complex
 		self._reconstruct_from_edge_list(edges, swap=True, expand_dimension=max_dimension)
@@ -760,13 +796,13 @@ cdef class SimplexTreeMulti:
 		reduced_tree = SimplexTreeMulti(num_parameters=self.num_parameters)
 
 		## Adds vertices back, with good filtration
-		if self.num_vertices() > 0:
+		if self.num_vertices > 0:
 			vertices = np.asarray([splx for splx, f in self.get_skeleton(0)], dtype=int).T
 			vertices_filtration = np.asarray([f for splx, f in self.get_skeleton(0)], dtype=np.float32)
 			reduced_tree.insert_batch(vertices, vertices_filtration)
 		
 		## Adds edges again
-		if self.num_simplices() - self.num_vertices() > 0:
+		if self.num_simplices - self.num_vertices > 0:
 			edges_filtration = np.asarray([f for e,f in edges], dtype=np.float32)
 			edges = np.asarray([e for e, _ in edges], dtype=int).T
 			reduced_tree.insert_batch(edges, edges_filtration)
@@ -838,7 +874,7 @@ cdef class SimplexTreeMulti:
 			file.write(f"{num_parameters}\n") 
 		if not strip_comments: file.write("# Sizes of generating sets\n")
 		## WRITES TSR VARIABLES
-		tsr:list= [0]*(self.dimension()+1) # dimension --- 0
+		tsr:list= [0]*(self.dimension+1) # dimension --- 0
 		for splx,f in self.get_simplices():
 			dim = len(splx)-1
 			tsr[dim] += (int)(len(f) // num_parameters)
@@ -848,7 +884,7 @@ cdef class SimplexTreeMulti:
 		## Adds the boundaries to the dictionnary + tsr
 		dict_splx_to_firep_number = {}
 		tsr:list = [[] for _ in range(len(tsr))] # tsr stores simplices vertices, according to dimension, and the dictionnary
-		for dim in range(self.dimension(),-1 , -1): # range(2,-1,-1):
+		for dim in range(self.dimension,-1 , -1): # range(2,-1,-1):
 			for splx,F in self.get_skeleton(dim):
 				if len(splx) != dim+1:	continue
 				for b,_ in self.get_boundaries(splx):
@@ -861,7 +897,7 @@ cdef class SimplexTreeMulti:
 			if not self.key(splx) in dict_splx_to_firep_number:
 				tsr[len(splx)-1].append(splx)
 		## Writes simplices of tsr to file
-		dim_range = range(self.dimension(),0,-1) if ignore_last_generators else range(self.dimension(),-1,-1)
+		dim_range = range(self.dimension,0,-1) if ignore_last_generators else range(self.dimension,-1,-1)
 		for dim in dim_range: # writes block by block
 			if not strip_comments: file.write(f"# Block of dimension {dim}\n")
 			if reverse_block:	tsr[dim].reverse()
@@ -912,8 +948,8 @@ cdef class SimplexTreeMulti:
 		file.write("--xlabel time of appearance\n")
 		file.write("--ylabel density\n\n")
 		from tqdm import tqdm
-		with tqdm(total=self.num_simplices(), position=0, disable = not(progress), desc="Writing simplex to file") as bar:
-			for dim in range(0,self.dimension()+1): # Not sure if dimension sort is necessary for rivet. Check ?
+		with tqdm(total=self.num_simplices, position=0, disable = not(progress), desc="Writing simplex to file") as bar:
+			for dim in range(0,self.dimension+1): # Not sure if dimension sort is necessary for rivet. Check ?
 				file.write(f"# block of dimension {dim}\n")
 				for s,F in self.get_skeleton(dim):
 					if len(s) != dim+1:	continue
@@ -929,12 +965,12 @@ cdef class SimplexTreeMulti:
 
 
 
-	def _get_filtration_values(self, degrees:Iterable[int], inf_to_nan:bool=False)->Iterable[np.ndarray]:
-		cdef vector[int] c_degrees = degrees
+	def _get_filtration_values(self, vector[int] degrees, bool inf_to_nan:bool=False)->Iterable[np.ndarray]:
+		# cdef vector[int] c_degrees = degrees
 		cdef intptr_t ptr = self.thisptr
 		cdef vector[vector[vector[value_type]]] out
 		with nogil:
-			out = get_filtration_values(ptr, c_degrees)
+			out = get_filtration_values(ptr, degrees)
 		filtrations_values =  [np.asarray(filtration) for filtration in out]
 		# Removes infs
 		if inf_to_nan:
@@ -943,7 +979,56 @@ cdef class SimplexTreeMulti:
 				filtrations_values[i][f == - np.inf] = np.nan
 		return filtrations_values
 	
-	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, q:float=0., grid_strategy:str="regular")->Iterable[np.ndarray]:
+	@staticmethod
+	def _reduce_grid(filtrations_values,resolutions=None, strategy:str="exact", bool unique=True, some_float _q_factor=1., drop_quantiles=[0,0]):
+		num_parameters = len(filtrations_values)
+		if resolutions is None and strategy not in ["exact", "precomputed"]:
+			raise ValueError("Resolutions must be provided for this strategy.")
+		elif resolutions is not None:
+			try:
+				int(resolutions)
+				resolutions = [resolutions]*num_parameters
+			except:
+				pass
+		try:
+			a,b=drop_quantiles
+		except:
+			a,b=drop_quantiles,drop_quantiles
+		
+		if a != 0 or b != 0:
+			boxes = np.asarray([np.quantile(filtration, [a, b], axis=1, method='closest_observation') for filtration in filtrations_values])
+			min_filtration, max_filtration = np.min(boxes, axis=(0,1)), np.max(boxes, axis=(0,1)) # box, birth/death, filtration
+			filtrations_values = [
+				filtration[(m<filtration) * (filtration <M)] 
+				for filtration, m,M in zip(filtrations_values, min_filtration, max_filtration)
+			]
+
+		## match doesn't work with cython BUG
+		if strategy == "exact":
+			F=[np.unique(f) for f in filtrations_values]
+		elif strategy == "quantile":
+			F = [np.unique(f) for f in filtrations_values]
+			max_resolution = [min(len(f),r) for f,r in zip(F,resolutions)]
+			F = [np.quantile(f, q=np.linspace(0,1,num=int(r*_q_factor)), axis=0, method='closest_observation') for f,r in zip(F, resolutions)]
+			if unique:
+				F = [np.unique(f) for f in F]
+				if np.all(np.asarray(max_resolution) > np.asarray([len(f) for f in F])):
+					return SimplexTreeMulti._reduce_grid(filtrations_values=filtrations_values, resolutions=resolutions, strategy="quantile",_q_factor=1.5*_q_factor)
+		elif strategy == "regular":
+			F = [np.linspace(f.min(),f.max(),num=r) for f,r in zip(filtrations_values, resolutions)]
+		elif strategy == "regular_closest":
+			
+			F = [_todo_regular_closest(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
+		elif strategy == "partition":
+			F = [_todo_partition(f,r, unique) for f,r in zip(filtrations_values, resolutions)]
+		elif strategy == "precomputed":
+			F=filtrations_values
+		else:
+			raise Exception("Invalid strategy. Pick either regular, regular_closest, partition, quantile, precomputed or exact.")
+
+		return F
+	
+	def get_filtration_grid(self, resolution:Iterable[int]|None=None, degrees:Iterable[int]|None=None, drop_quantiles:float|tuple=0, grid_strategy:str="exact")->Iterable[np.ndarray]:
 		"""
 		Returns a grid over the n-filtration, from the simplextree. Usefull for grid_squeeze. TODO : multicritical
 
@@ -960,52 +1045,22 @@ cdef class SimplexTreeMulti:
 		-------
 			List of filtration values, for each parameter, defining the grid.
 		"""
-		try: 
-			int(resolution)
-			resolution = [resolution]*self.num_parameters
-		except:
-			None
-		if resolution is None:
-			resolution = [25]*self.num_parameters
 		if degrees is None:
-			degrees = range(self.dimension()+1)
+			degrees = range(self.dimension+1)
+		
 
-		if grid_strategy == "quantile":
-			filtrations_values = np.concatenate(self._get_filtration_values(degrees, inf_to_nan=True), axis=1)
-			filtration_grid = [
-				np.nanquantile(f, np.linspace(0,1,num=res), method='closest_observation')
-				for f, res in zip(filtrations_values, resolution) 
-			]
-			return filtration_grid
+		## preprocesses the filtration values:
+		filtrations_values = np.concatenate(self._get_filtration_values(degrees, inf_to_nan=True), axis=1)
+		# removes duplicate + sort (nan at the end)
+		filtrations_values = [np.unique(filtration) for filtration in filtrations_values]
+		# removes nan
+		filtrations_values = [filtration[:-1] if np.isnan(filtration[-1]) else filtration for filtration in filtrations_values]
 		
-		if grid_strategy == "exact":
-			filtrations_values = np.concatenate(self._get_filtration_values(degrees, inf_to_nan=True), axis=1)
-			# removes duplicate + sort (nan at the end)
-			filtrations_values = [np.unique(filtration) for filtration in filtrations_values]
-			# removes nan
-			filtrations_values = [filtration[:-1] if np.isnan(filtration[-1]) else filtration for filtration in filtrations_values]
-			
-			# computes the quantiles to drop
-			if q != 0:
-				boxes = np.asarray([np.nanquantile(filtration, [q, 1-q], axis=1, method='closest_observation') for filtration in filtrations_values],dtype=float)
-				min_filtration, max_filtration = np.nanmin(boxes, axis=(0,1)), np.nanmax(boxes, axis=(0,1)) # box, birth/death, filtration
-				filtrations_values = [
-					filtration[(m<filtration) * (filtration <M)] 
-					for filtration, m,M in zip(filtrations_values, min_filtration, max_filtration)
-				]
-			
-			return filtrations_values
-		
-		box = self.filtration_bounds(degrees = degrees,q=q, split_dimension=False)
-		assert(len(box[0]) == len(box[1]) == len(resolution) == self.num_parameters, f"Number of parameter not concistent. box: {len(box[0])}, resolution:{len(resolution)}, simplex tree:{self.num_parameters}")
-		
-		if grid_strategy == "regular":
-			return [np.linspace(*np.asarray(box)[:,i], num=resolution[i]) for i in range(self.num_parameters)]
-		
-		raise Exception("Invalid grid strategy. Available ones are regular, quantile, and exact")
+		return self._reduce_grid(filtrations_values=filtrations_values, resolutions=resolution,strategy=grid_strategy,drop_quantiles=drop_quantiles)
+	
 	
 
-	def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, coordinate_values:bool=True)->SimplexTreeMulti:
+	def grid_squeeze(self, filtration_grid:np.ndarray|list|None=None, bool coordinate_values=True, force=False, **filtration_grid_kwargs)->SimplexTreeMulti:
 		"""
 		Fit the filtration of the simplextree to a grid.
 		
@@ -1014,24 +1069,33 @@ cdef class SimplexTreeMulti:
 		:param coordinate_values: If true, the filtrations values of the simplices will be set to the coordinate of the filtration grid.
 		:type coordinate_values: bool
 		"""
+		if not force and self._is_squeezed:
+			raise Exception("SimplexTree already squeezed, use `force=True` if that's really what you want to do.") 
 		#TODO : multi-critical
-		if filtration_grid is None:	filtration_grid = self.get_filtration_grid()
+		if filtration_grid is None:	filtration_grid = self.get_filtration_grid(**filtration_grid_kwargs)
 		cdef vector[vector[value_type]] c_filtration_grid = filtration_grid
 		cdef intptr_t ptr = self.thisptr
-		cdef bool c_coordinate_values = coordinate_values
-		self.filtration_grid = c_filtration_grid
+		if coordinate_values:
+			self.filtration_grid = c_filtration_grid
 		with nogil:
-			squeeze_filtration(ptr, c_filtration_grid, c_coordinate_values)
+			squeeze_filtration(ptr, c_filtration_grid, coordinate_values)
 		return self
 
-	def filtration_bounds(self, degrees:Iterable[int]|None=None, q:float=0, split_dimension:bool=False)->np.ndarray:
+	@property
+	def _is_squeezed(self)->bool:
+		return self.num_vertices > 0 and self.filtration_grid[0].size() > 0
+
+	def filtration_bounds(self, degrees:Iterable[int]|None=None, q:float|tuple=0, split_dimension:bool=False)->np.ndarray:
 		"""
 		Returns the filtrations bounds of the finite filtration values.
 		"""
-		assert 0<= q <= 0.5
-		degrees = range(self.dimension()+1) if degrees is None else degrees
+		try:
+			a,b =q
+		except:
+			a,b,=q,q
+		degrees = range(self.dimension+1) if degrees is None else degrees
 		filtrations_values = self._get_filtration_values(degrees, inf_to_nan=True) ## degree, parameter, pt
-		boxes = np.array([np.nanquantile(filtration, [q, 1-q], axis=1) for filtration in filtrations_values],dtype=float)
+		boxes = np.array([np.nanquantile(filtration, [a, 1-b], axis=1) for filtration in filtrations_values],dtype=float)
 		if split_dimension: return boxes
 		return np.asarray([np.nanmin(boxes, axis=(0,1)), np.nanmax(boxes, axis=(0,1))]) # box, birth/death, filtration
 
@@ -1086,10 +1150,10 @@ cdef class SimplexTreeMulti:
 		cdef vector[value_type] c_basepoint = [] if basepoint is None else basepoint
 		if basepoint is None:
 			with nogil:
-				flatten(old_ptr, new_ptr, c_parameter)
+				flatten_from_ptr(old_ptr, new_ptr, c_parameter)
 		else:
 			with nogil:
-				flatten_diag(old_ptr, new_ptr, c_basepoint, c_parameter)
+				flatten_diag_from_ptr(old_ptr, new_ptr, c_basepoint, c_parameter)
 		return new_simplextree
 
 	def linear_projections(self, linear_forms:np.ndarray)->Iterable[SimplexTree]:
@@ -1116,14 +1180,14 @@ cdef class SimplexTreeMulti:
 		cdef intptr_t multi_prt = self.thisptr
 		cdef intptr_t flattened_ptr = flattened_simplextree.thisptr
 		with nogil:
-			flatten(multi_prt, flattened_ptr, num_parameters)
+			flatten_from_ptr(multi_prt, flattened_ptr, num_parameters)
 		out = [flattened_simplextree] + [gd.SimplexTree(flattened_simplextree) for _ in range(num_projections-1)]
 
 		# Fills the 1-parameter simplextrees.
 		cdef vector[intptr_t] out_ptrs = [st.thisptr for st in out]
 		with nogil:
 			for i in range(num_projections):
-				linear_projection(out_ptrs[i], multi_prt, c_linear_forms[i])
+				linear_projection_from_ptr(out_ptrs[i], multi_prt, c_linear_forms[i])
 		return out
 
 
@@ -1143,63 +1207,23 @@ cdef class SimplexTreeMulti:
 		"""
 		return dereference(self.get_ptr()) == dereference(other.get_ptr())
 	
-	def euler_char(self, points:np.ndarray|list) -> np.ndarray:
-		""" Computes the Euler Characteristic of the filtered complex at given (multiparameter) time
-
-		Parameters
-		----------
-		points: 2-dimensional array.
-			List of filtration values on which to compute the euler characteristic.
-
-		Returns
-		-------
-		The list of euler characteristic values
-		"""
-		# TODO : muticritical, compute it from a coordinate simplextree, tbb.
-#		if len(points) == 0:
-#			return cnp.empty()
-#		if type(points[0]) is float:
-#			points = cnp.array([points])
-#		if type(points) is cnp.ndarray:
-#			assert len(points.shape) in [1,2]
-#			if len(points.shape) == 1:
-#				points = [points]
-		c_points = np.asarray(points)
-		assert c_points.shape[1] == self.num_parameters
-		return np.asarray(self.get_ptr().euler_char(c_points))
-
-
 cdef intptr_t _get_copy_intptr(SimplexTreeMulti stree) nogil:
 	return <intptr_t>(new Simplex_tree_multi_interface(dereference(stree.get_ptr())))
 
 
-def _collapse_edge_list(edges, num:int=0, full:bool=False, strong:bool=False, progress:bool=False):
-	"""
-	Given an edge list defining a 1 critical 2 parameter 1 dimensional simplicial complex, simplificates this filtered simplicial complex, using filtration-domination's edge collapser.
-	"""
-	from filtration_domination import remove_strongly_filtration_dominated, remove_filtration_dominated
-	n = len(edges)
-	if full:
-		num = 100
-	with tqdm(range(num), total=num, desc="Removing edges", disable=not(progress)) as I:
-		for i in I:
-			if strong:
-				edges = remove_strongly_filtration_dominated(edges) # nogil ?
-			else:
-				edges = remove_filtration_dominated(edges)
-			# Prevents doing useless collapses
-			if len(edges) >= n:
-				if full and strong:
-					strong = False
-					n = len(edges)
-					# n = edges.size() # len(edges)
-				else : 
-					break
-			else:
-				n = len(edges)
-				# n = edges.size()
-	return edges
+def _todo_regular_closest(cnp.ndarray[some_float,ndim=1] f, int r, bool unique):
+	f_regular = np.linspace(np.min(f),np.max(f),num=r)
+	f_regular_closest = np.asarray([f[np.argmin(np.abs(f-x))] for x in f_regular])
+	if unique: f_regular_closest = np.unique(f_regular_closest)
+	return f_regular_closest
 
+def _todo_partition(cnp.ndarray[some_float,ndim=1] data,int resolution, bool unique):
+	if data.shape[0] < resolution: resolution=data.shape[0]
+	k = data.shape[0] // resolution
+	partitions = np.partition(data, k)
+	f = partitions[[i*k for i in range(resolution)]]
+	if unique: f= np.unique(f)
+	return f
 
 
 
@@ -1221,5 +1245,5 @@ def _simplextree_multify(simplextree:SimplexTree, num_parameters:int=2, default_
 	cdef intptr_t new_ptr = st.thisptr
 	cdef vector[value_type] c_default_values=default_values
 	with nogil:
-		multify(old_ptr, new_ptr, c_num_parameters, c_default_values)
-	return st
+		multify_from_ptr(old_ptr, new_ptr, c_num_parameters, c_default_values)
+	return 

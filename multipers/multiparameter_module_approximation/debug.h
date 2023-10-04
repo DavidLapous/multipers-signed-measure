@@ -24,7 +24,7 @@
 
 #include <functional>
 
-namespace Gudhi::mma::Debug {
+namespace Gudhi::multiparameter::mma::Debug {
 
 using clk = std::chrono::high_resolution_clock;
 using tp = clk::time_point;
