@@ -1,3 +1,11 @@
+# Archived !
+**I've decided to merge everything with [my multipers repo](https://github.com/DavidLapous/multipers), as most of the code is shared.**
+<br>
+Install this one instead ! It is also available on [PyPI](https://pypi.org/project/multipers/), i.e., you can easily install precompiled versions using `pip install multipers`.
+<br>
+<br>
+<br>
+
 # Multiparameter Persistence using Signed Measures
 Scikit-style multiparameter persistent homology python library, using signed measure and their representation for machine learning. 
 **Note:** Next update after the release of Gudhi 3.9. 
